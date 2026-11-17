@@ -1,0 +1,319 @@
+/* ─── Famly Enquiry Form ────────────────────────────────────────── */
+
+.famly-form-wrapper {
+    max-width: 720px;
+    margin: 0 auto;
+    font-family: inherit;
+}
+
+.famly-section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 2rem 0 1rem;
+    color: #2d2d2d;
+}
+
+.famly-section-title:first-child {
+    margin-top: 0;
+}
+
+/* Sub-labels below name field inputs */
+.famly-form-wrapper .gform-field-label--type-sub {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: #888;
+    margin-top: 4px;
+}
+
+.famly-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0;
+    flex-wrap: wrap;
+    align-items: stretch;
+}
+
+.famly-field {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.famly-full  { flex: 1 1 100%; }
+.famly-half  { flex: 1 1 calc(50% - 0.5rem); min-width: 200px; }
+.famly-third { flex: 1 1 calc(33.33% - 0.67rem); min-width: 140px; }
+
+.famly-field > label {
+    display: block;
+    flex: 1;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+    color: #444;
+}
+
+.famly-req { color: #e74c3c; }
+
+.famly-field input[type="text"],
+.famly-field input[type="email"],
+.famly-field input[type="tel"],
+.famly-field input[type="date"],
+.famly-field select {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.95rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.famly-field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+}
+
+.famly-field input:focus,
+.famly-field select:focus {
+    outline: none;
+    border-color: #e8a87c;
+    box-shadow: 0 0 0 3px rgba(232, 168, 124, 0.2);
+}
+
+.famly-field input.famly-invalid,
+.famly-field select.famly-invalid {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.12);
+}
+
+/* Name fieldsets (GF-compatible markup) */
+.famly-form-wrapper fieldset.gfield {
+    border: 0;
+    padding: 0;
+    margin: 0 0 1rem;
+}
+
+.famly-form-wrapper .gform-grid-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.famly-form-wrapper .gform-grid-col--size-auto {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 200px;
+}
+
+.famly-form-wrapper .gform-grid-col input[type="text"] {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.95rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    box-sizing: border-box;
+}
+
+.famly-form-wrapper .gform-grid-col input[type="text"]:focus {
+    outline: none;
+    border-color: #e8a87c;
+    box-shadow: 0 0 0 3px rgba(232, 168, 124, 0.2);
+}
+
+.famly-form-wrapper .gform-grid-col input[type="text"].famly-invalid {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.12);
+}
+
+/* Checkbox (theme-proof) */
+.famly-checkbox-wrap {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    cursor: pointer;
+    padding: 12px 0;
+}
+
+.famly-checkbox-wrap input[type="checkbox"].famly-checkbox {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    flex-shrink: 0 !important;
+    display: inline-block !important;
+    background: #fff !important;
+    border: 2px solid #aaa !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    position: relative !important;
+    vertical-align: top !important;
+    margin: 2px 0 0 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+    overflow: visible !important;
+}
+
+.famly-checkbox-wrap input[type="checkbox"].famly-checkbox:checked {
+    background: #e8a87c !important;
+    border-color: #e8a87c !important;
+}
+
+.famly-checkbox-wrap input[type="checkbox"].famly-checkbox:checked::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    left: 5px !important;
+    top: 1px !important;
+    width: 6px !important;
+    height: 11px !important;
+    border: solid #fff !important;
+    border-width: 0 2px 2px 0 !important;
+    transform: rotate(45deg) !important;
+}
+
+.famly-checkbox-wrap input[type="checkbox"].famly-checkbox:focus {
+    box-shadow: 0 0 0 3px rgba(232, 168, 124, 0.3) !important;
+}
+
+.famly-checkbox-wrap input[type="checkbox"].famly-checkbox.famly-invalid {
+    border-color: #e74c3c !important;
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.12) !important;
+}
+
+.famly-consent-label {
+    font-size: 0.9rem !important;
+    font-weight: 400 !important;
+    color: #555 !important;
+    line-height: 1.5 !important;
+    cursor: pointer !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Submit */
+.famly-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.8rem 2.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: #e8a87c;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+    min-width: 200px;
+}
+
+.famly-submit:hover { background: #d9956a; }
+.famly-submit:active { transform: scale(0.98); }
+.famly-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+/* Success / Error */
+.famly-success {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.famly-success-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1.5rem;
+    background: #27ae60;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.famly-success h3 { font-size: 1.5rem; margin: 0 0 0.5rem; color: #2d2d2d; }
+.famly-success p { font-size: 1rem; color: #666; margin: 0; }
+
+.famly-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    color: #991b1b;
+    font-size: 0.9rem;
+}
+
+.famly-error a { color: #991b1b; font-weight: 600; }
+
+@media (max-width: 600px) {
+    .famly-half, .famly-third { flex: 1 1 100%; }
+    .famly-submit { width: 100%; }
+}
+
+/* Honeypot: hidden from people and screen readers, visible to naive bots */
+.famly-hp {
+    position: absolute !important;
+    left: -10000px !important;
+    top: auto !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+}
+
+/* Turnstile ("interaction-only": usually takes no space) */
+.famly-turnstile-wrap { margin-bottom: 0; }
+.famly-turnstile-wrap iframe { margin-bottom: 1rem; }
+
+/* Extra questions: checkbox groups */
+.famly-form-wrapper fieldset.famly-extra-checkboxes {
+    border: 0;
+    padding: 0;
+    margin: 0 0 1rem;
+    min-width: 0;
+}
+
+.famly-checkbox-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.5rem;
+}
+
+.famly-checkbox-grid .famly-checkbox-wrap { padding: 6px 0; }
+
+.famly-form-wrapper fieldset.famly-invalid legend { color: #e74c3c; }
+
+/* Link mode */
+.famly-link-mode { text-align: left; }
+.famly-link-intro { margin: 0 0 1.25rem; }
+.famly-link-button,
+.famly-link-button:visited {
+    text-decoration: none;
+}
+.famly-link-note {
+    margin: 1rem 0 0;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}

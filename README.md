@@ -1,0 +1,100 @@
+# Famly Enquiry Form (wp-famly)
+
+A WordPress plugin for nursery websites that use [Famly](https://www.famly.co/). Each nursery can work in one of two modes:
+
+- **Link mode.** A styled "Book your tour" button opens the nursery's own Famly enquiry form. Parents can book a tour slot there, and the answers to the nursery's custom questions land in proper Famly fields. No API access is needed. Famly forms can't be embedded (app.famly.co sends `X-Frame-Options: SAMEORIGIN`), so this is a link.
+- **API form mode.** An on-page enquiry form, styled to match the site, that creates the enquiry in Famly through the [Famly Public API](https://docs.famly.co/) (`inquiries.create`). It needs Famly's paid API add-on and an API token. Tour booking isn't possible through the API, so staff arrange tours.
+
+Built by Two Ten Studio. The markup, styling hooks and GTM events follow our EYWorks Enquiry Form 3.x, so a site can switch over with only a shortcode change.
+
+## Shortcode
+
+```
+[famly_enquiry_form site="deptford"]
+```
+
+`site` is a nursery key from **Famly Enquiries → Settings → Nurseries**. You can also use the nursery's name. Only one form per page is supported.
+
+## API form mode
+
+### What gets sent to Famly
+
+| Form field | Famly `InquiryInput` |
+|---|---|
+| Child first + last name | `name` (Famly takes a single full-name string) |
+| Child date of birth / expected DOB | `birthday` (required by Famly) |
+| Legal gender: Female / Male | `gender` FEMALE / MALE ("Unknown / Other" goes in the note) |
+| Preferred start date | `startDate` (required by Famly) |
+| Parent first + last name, email | `contacts[0].name`, `contacts[0].email` (required by Famly) |
+| Phone | `contacts[0].mobilePhone` (normalised to +44…; otherwise added to the note) |
+| How did you hear about us? | `source` (mapped to Famly's fixed list), and the label in the note |
+| Postcode, extra questions, consent, UTM | `note` (Famly's API has no fields for these) |
+| — | `bookingSource: WEBSITE`, `referenceNumber: {foreignId: "wp-<id>", system}` |
+
+### Nothing is lost
+
+1. Every enquiry is saved to the `wp_famly_enquiries` table before Famly is called.
+2. If Famly fails (connection error, expired token, missing site ID, validation error), the enquiry is marked **Not in Famly**. An **ACTION NEEDED** email with all the details goes to the notification addresses, and the admin menu shows a count.
+3. **Famly Enquiries** in wp-admin has **Send to Famly** (retry) and **Added by hand** buttons. Retries are manual on purpose, so an ambiguous timeout can't create duplicates. An enquiry that already has a Famly ID is never resent.
+4. The parent always sees the thank-you message once the enquiry is saved.
+
+### Spam protection
+
+- A honeypot field. Entries that fill it are kept as **Held** but not sent.
+- Cloudflare Turnstile in `interaction-only` mode. It can reuse the Gravity Forms Turnstile add-on's keys. If Cloudflare is unreachable, the enquiry is let through rather than lost.
+- A WordPress nonce. A stale nonce on a cached page doesn't block a submission that passed Turnstile.
+
+## Configuration
+
+Settings live in **Famly Enquiries → Settings**. Secrets can go in `wp-config.php` instead, and constants take priority:
+
+```php
+define('FAMLY_API_TOKEN', '…');               // organisation token, used for every nursery
+define('FAMLY_API_TOKEN_SURREY_QUAYS', '…');  // optional per-nursery token (key upper-cased, - → _)
+define('FAMLY_API_URL', 'https://famlyapi.famly.de/v1/graphql'); // only for app.famly.de
+define('FAMLY_NOTIFY_EMAIL', 'team@example.com');
+define('FAMLY_TURNSTILE_SITE_KEY', '…');
+define('FAMLY_TURNSTILE_SECRET', '…');
+```
+
+### Getting a Famly API token
+
+API access is a paid Famly add-on (support@famly.co). Once it's enabled, create either kind of token:
+
+- **Organisation token:** Home → Overview → choose the organisation → Settings → Manage API Tokens → Add new token.
+- **Site token:** Settings → Integrations → Manage API Tokens → Add new token.
+
+Give it a publisher name such as "Website" and a long expiry, and the minimum permissions. That means creating enquiries; reading sites helps with setup. Then use **Test connection** on the settings page to list the sites the token can see, along with their site IDs.
+
+### Extra questions (API form mode)
+
+One per line, in this form: `Question | select | Option A; Option B`, `Question | checkbox* | Mon; Tue` (`*` = required) or `Question | text`. A nursery can have its own list. The answers go into the Famly note and the emails.
+
+## Tracking
+
+| Event (`dataLayer`) | When |
+|---|---|
+| `tour_booking_attempted` | Submit pressed and the form is valid |
+| `tour_booking_submitted` | Enquiry saved. Also fires the DOM event `famly:enquiry-submitted` |
+| `tour_booking_error` | Submission failed |
+| `tour_booking_link_clicked` | Link mode: "Book your tour" clicked. Also fires `famly:tour-link-clicked` |
+
+All events carry `nursery`. The AJAX action is `famly_submit_enquiry`.
+
+## WP-CLI
+
+```
+wp famly-enquiry status            # config + counts, no personal data
+wp famly-enquiry sites             # Famly sites visible to the shared token
+wp famly-enquiry dry-run --site=…  # checks the payload against Famly's schema WITHOUT a token (creates nothing)
+wp famly-enquiry retry <id>        # send a stored enquiry to Famly
+```
+
+## Updates
+
+The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
+
+## Changelog
+
+### 1.0.0
+- First release. Link mode and API form mode per nursery, local storage, ACTION NEEDED email fallback, manual retry, honeypot and Turnstile, GTM events, CSV export, WP-CLI commands, and a GitHub updater.
