@@ -91,9 +91,9 @@ function famly_ef_render_form($atts) {
             <input type="hidden" id="fe-site" value="<?php echo esc_attr($site['key']); ?>">
             <input type="hidden" id="fe-site-label" value="<?php echo esc_attr($site['label']); ?>">
 
-            <div class="famly-hp" aria-hidden="true">
+            <div class="famly-hp" aria-hidden="true" style="display:none !important;">
                 <label for="fe-extra">Leave this field empty</label>
-                <input type="text" id="fe-extra" name="fe_extra" tabindex="-1" autocomplete="off" value="">
+                <input type="text" id="fe-extra" name="fe_extra" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" value="">
             </div>
 
             <h3 class="famly-section-title">Child Details</h3>

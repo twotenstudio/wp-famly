@@ -52,15 +52,7 @@ function famly_ef_handle_submission() {
     $data['site_label']    = $site['label'];
     $data['famly_site_id'] = $site['site_id'] ?? '';
 
-    // 1. Honeypot: bots fill the hidden field. Keep the entry (status "held")
-    //    in case it was a person, but don't send it anywhere.
-    if (famly_ef_post('fe_extra') !== '') {
-        famly_ef_insert_enquiry($data + ['status' => 'held', 'status_reason' => 'Honeypot field was filled in']);
-        famly_ef_log('Held a submission: honeypot filled (' . $site['key'] . ')');
-        wp_send_json_success(['message' => 'Enquiry submitted successfully.', 'nursery' => $site['label']]);
-    }
-
-    // 2. Validation (Famly always needs child name, DOB, start date, parent name and email).
+    // 1. Validation (Famly always needs child name, DOB, start date, parent name and email).
     $values = [
         'child_first_name'  => $data['child_first_name'],
         'child_last_name'   => $data['child_last_name'],
@@ -115,13 +107,26 @@ function famly_ef_handle_submission() {
     }
     $data['extra_answers'] = $answers ? wp_json_encode($answers) : null;
 
-    // 3. Turnstile. If Cloudflare can't be reached, let the enquiry through
+    // 2. Turnstile. If Cloudflare can't be reached, let the enquiry through
     //    rather than lose it.
     $turnstile = famly_ef_verify_turnstile(famly_ef_post('turnstile_token', 2048));
     if ($turnstile === 'fail') {
         famly_ef_insert_enquiry($data + ['status' => 'held', 'status_reason' => 'Turnstile check failed']);
         famly_ef_log('Held a submission: Turnstile failed (' . $site['key'] . ')');
         wp_send_json_error(['message' => 'We couldn\'t verify you\'re not a robot. Please try again.', 'turnstile' => true]);
+    }
+
+    // 3. Honeypot. Autofill and password managers sometimes fill hidden
+    //    fields, so a filled honeypot only holds the enquiry when Turnstile
+    //    hasn't verified the visitor. Held entries are kept, not sent.
+    if (famly_ef_post('fe_extra') !== '') {
+        if ($turnstile === 'pass') {
+            famly_ef_log('Honeypot filled but Turnstile passed; treating as a person (' . $site['key'] . ')');
+        } else {
+            famly_ef_insert_enquiry($data + ['status' => 'held', 'status_reason' => 'Honeypot field was filled in']);
+            famly_ef_log('Held a submission: honeypot filled, Turnstile ' . $turnstile . ' (' . $site['key'] . ')');
+            wp_send_json_success(['message' => 'Enquiry submitted successfully.', 'nursery' => $site['label']]);
+        }
     }
 
     // 4. Nonce. Pages can be served from cache, so a stale nonce alone doesn't

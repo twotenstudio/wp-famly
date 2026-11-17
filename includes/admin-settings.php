@@ -116,7 +116,21 @@ add_action('admin_post_famly_ef_test_connection', function () {
         $report[] = ['label' => $label, 'ok' => $r['ok'], 'error' => $r['error'], 'sites' => $r['sites']];
         famly_ef_log('Test connection (' . $label . '): ' . ($r['ok'] ? count($r['sites']) . ' site(s)' : $r['error']));
     }
-    set_transient('famly_ef_connection_report_' . get_current_user_id(), ['time' => time(), 'report' => $report], 10 * MINUTE_IN_SECONDS);
+    // Per nursery: can its token see its site, with the enquiries permission?
+    $nurseries = [];
+    foreach (famly_ef_sites() as $site) {
+        $token = famly_ef_token_for_site($site);
+        $row   = ['label' => $site['label'], 'mode' => $site['mode'], 'source' => famly_ef_token_source($site), 'site_id' => $site['site_id']];
+        if (!$token || !$site['site_id']) {
+            $row += ['sees_site' => null, 'enquiries' => false, 'site_title' => '', 'token_sites' => [],
+                     'error' => !$token ? 'No token' : 'No Famly site ID'];
+        } else {
+            $row += famly_ef_check_site_access($token, $site['site_id']);
+        }
+        $nurseries[] = $row;
+        famly_ef_log('Test connection (' . $site['key'] . '): sees site=' . var_export($row['sees_site'], true) . ', enquiries=' . ($row['enquiries'] ? 'yes' : 'no'));
+    }
+    set_transient('famly_ef_connection_report_' . get_current_user_id(), ['time' => time(), 'report' => $report, 'nurseries' => $nurseries], 10 * MINUTE_IN_SECONDS);
 
     wp_safe_redirect(admin_url('admin.php?page=famly-enquiry-settings&tested=1'));
     exit;
@@ -146,6 +160,36 @@ function famly_ef_settings_page() {
         <h1>Famly Enquiry Form Settings</h1>
         <?php settings_errors('famly_ef_settings'); ?>
 
+        <?php if ($report && !empty($report['nurseries'])) : $all_ok = true; ?>
+            <?php foreach ($report['nurseries'] as $n) if (!$n['sees_site'] || !$n['enquiries']) $all_ok = false; ?>
+            <div class="notice <?php echo $all_ok ? 'notice-success' : 'notice-error'; ?>">
+                <p><strong><?php echo $all_ok ? 'Every nursery can create enquiries in Famly.' : 'At least one nursery cannot create enquiries in Famly.'; ?></strong> Checked without reading or creating any Famly records.</p>
+                <table class="widefat striped" style="max-width:1000px;margin-bottom:10px;">
+                    <thead><tr><th>Nursery</th><th>Mode</th><th>Token used</th><th>Token can see this site</th><th>Enquiries permission</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($report['nurseries'] as $n) : ?>
+                        <tr>
+                            <td><?php echo esc_html($n['label']); ?></td>
+                            <td><?php echo $n['mode'] === 'form' ? 'API form' : 'Link'; ?></td>
+                            <td><?php echo esc_html($n['source']); ?></td>
+                            <td><?php
+                                if ($n['sees_site']) {
+                                    echo '<span style="color:#1e8e3e;">&#10003;</span> ' . esc_html($n['site_title']);
+                                } elseif ($n['sees_site'] === false) {
+                                    echo '<span style="color:#d63638;">&#10007; No.</span> This token only sees: ' . esc_html(implode(', ', $n['token_sites']) ?: 'nothing');
+                                } else {
+                                    echo '—';
+                                }
+                            ?></td>
+                            <td><?php echo $n['enquiries'] ? '<span style="color:#1e8e3e;">&#10003; Yes</span>' : '<span style="color:#d63638;">&#10007; ' . esc_html($n['error'] ?: 'No') . '</span>'; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php if (!$all_ok) : ?><p>A token only covers the Famly site it was created in. To make one for another nursery, switch Famly's site picker to that nursery first, then go to Settings → Integrations → Manage API Tokens, and tick <strong>Enrolment → Manage enquiries</strong>.</p><?php endif; ?>
+            </div>
+        <?php endif; ?>
+
         <?php if ($report) : ?>
             <?php foreach ($report['report'] as $r) : ?>
                 <div class="notice <?php echo $r['ok'] ? 'notice-success' : 'notice-error'; ?>">
@@ -170,7 +214,7 @@ function famly_ef_settings_page() {
             <?php settings_fields('famly_ef_settings_group'); ?>
 
             <h2>Famly connection</h2>
-            <p>Create an API token in Famly: organisation token (Home → Overview → choose the organisation → Settings → Manage API Tokens) or site token (Settings → Integrations → Manage API Tokens). It needs permission to create enquiries. API access is a paid Famly add-on.</p>
+            <p>Create an API token in Famly: organisation token (Home → Overview → choose the organisation → Settings → Manage API Tokens) or site token (Settings → Integrations → Manage API Tokens). Give it the <strong>Enrolment → Manage enquiries</strong> permission only. A site token only covers the site it was created in. API access is a paid Famly add-on.</p>
             <table class="form-table" role="presentation">
                 <tr><th scope="row">API token</th><td><?php famly_ef_secret_field('famly_ef_settings[api_token]', $s['api_token'], 'FAMLY_API_TOKEN'); ?>
                     <p class="description">Used for every nursery unless that nursery has its own token below. Watch the token's expiry date in Famly: when it expires, enquiries are emailed as "not in Famly" until a new one is entered.</p></td></tr>

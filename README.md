@@ -40,7 +40,7 @@ Built by Two Ten Studio. The markup, styling hooks and GTM events follow our EYW
 
 ### Spam protection
 
-- A honeypot field. Entries that fill it are kept as **Held** but not sent.
+- A honeypot field, hidden with `display:none` and ignore flags for password managers. A filled honeypot only holds the enquiry (**Held**, not sent) when Turnstile hasn't verified the visitor, because autofill sometimes fills hidden fields.
 - Cloudflare Turnstile in `interaction-only` mode. It can reuse the Gravity Forms Turnstile add-on's keys. If Cloudflare is unreachable, the enquiry is let through rather than lost.
 - A WordPress nonce. A stale nonce on a cached page doesn't block a submission that passed Turnstile.
 
@@ -64,7 +64,7 @@ API access is a paid Famly add-on (support@famly.co). Once it's enabled, create 
 - **Organisation token:** Home → Overview → choose the organisation → Settings → Manage API Tokens → Add new token.
 - **Site token:** Settings → Integrations → Manage API Tokens → Add new token.
 
-Give it a publisher name such as "Website" and a long expiry, and the minimum permissions. That means creating enquiries; reading sites helps with setup. Then use **Test connection** on the settings page to list the sites the token can see, along with their site IDs.
+Give it a publisher name such as "Website", a long expiry, and the **Enrolment → Manage enquiries** permission only. A site token only covers the site it was created in, so switch Famly's site picker to the right nursery before creating it. Then use **Test connection** on the settings page to list the sites the token can see, along with their site IDs.
 
 ### Extra questions (API form mode)
 
@@ -85,6 +85,7 @@ All events carry `nursery`. The AJAX action is `famly_submit_enquiry`.
 
 ```
 wp famly-enquiry status            # config + counts, no personal data
+wp famly-enquiry check             # per nursery: does its token see its site, with the enquiries permission? (read-only)
 wp famly-enquiry sites             # Famly sites visible to the shared token
 wp famly-enquiry dry-run --site=…  # checks the payload against Famly's schema WITHOUT a token (creates nothing)
 wp famly-enquiry retry <id>        # send a stored enquiry to Famly
@@ -95,6 +96,10 @@ wp famly-enquiry retry <id>        # send a stored enquiry to Famly
 The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
 
 ## Changelog
+
+### 1.0.1
+- Fix: browser or password-manager autofill could fill the hidden honeypot field, so real enquiries were held and never sent to Famly. The honeypot is now `display:none` with ignore flags, and it only holds an enquiry when Turnstile didn't verify the visitor.
+- Test connection (and the new `wp famly-enquiry check`) now checks each nursery's token against that nursery's own site and the enquiries permission, without reading or creating anything.
 
 ### 1.0.0
 - First release. Link mode and API form mode per nursery, local storage, ACTION NEEDED email fallback, manual retry, honeypot and Turnstile, GTM events, CSV export, WP-CLI commands, and a GitHub updater.

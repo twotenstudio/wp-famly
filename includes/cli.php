@@ -1,6 +1,6 @@
 <?php
 /**
- * WP-CLI: wp famly-enquiry <sites|dry-run|retry|status>
+ * WP-CLI: wp famly-enquiry <status|check|sites|dry-run|retry>
  */
 
 if (!defined('ABSPATH')) exit;
@@ -58,6 +58,26 @@ class Famly_EF_CLI {
         $r = famly_ef_send_to_famly((int) $args[0]);
         if ($r['ok']) WP_CLI::success('Created Famly inquiry ' . $r['inquiry_id']);
         else WP_CLI::error($r['error']);
+    }
+
+    /**
+     * For each nursery: can its token see its Famly site, with the enquiries
+     * permission? Read-only: no Famly records are read or created.
+     */
+    public function check() {
+        $items = [];
+        $bad   = 0;
+        foreach (famly_ef_sites() as $site) {
+            $token = famly_ef_token_for_site($site);
+            $c = ($token && $site['site_id']) ? famly_ef_check_site_access($token, $site['site_id'])
+                : ['sees_site' => null, 'site_title' => '', 'token_sites' => [], 'enquiries' => false, 'error' => $token ? 'No site ID' : 'No token'];
+            if (!$c['sees_site'] || !$c['enquiries']) $bad++;
+            $items[] = ['nursery' => $site['key'], 'mode' => $site['mode'], 'token' => famly_ef_token_source($site),
+                        'sees_site' => $c['sees_site'] ? 'yes' : ('no (sees: ' . (implode(', ', $c['token_sites']) ?: '-') . ')'),
+                        'enquiries' => $c['enquiries'] ? 'yes' : ($c['error'] ?: 'no')];
+        }
+        WP_CLI\Utils\format_items('table', $items, ['nursery', 'mode', 'token', 'sees_site', 'enquiries']);
+        $bad ? WP_CLI::error($bad . ' nursery/nurseries cannot create enquiries in Famly.') : WP_CLI::success('Every nursery can create enquiries in Famly.');
     }
 
     /**

@@ -138,6 +138,15 @@ function famly_ef_token_for_site($site) {
     return famly_ef_global_token();
 }
 
+/** Describe where a nursery's token comes from (for admin screens; never the token itself). */
+function famly_ef_token_source($site) {
+    $const = famly_ef_site_token_constant($site['key'] ?? '');
+    if (defined($const) && constant($const)) return $const . ' (wp-config.php)';
+    if (!empty($site['api_token'])) return 'its own token';
+    if (defined('FAMLY_API_TOKEN') && FAMLY_API_TOKEN) return 'FAMLY_API_TOKEN (wp-config.php)';
+    return famly_ef_get_setting('api_token') ? 'the shared token' : 'none';
+}
+
 function famly_ef_global_token() {
     if (defined('FAMLY_API_TOKEN') && FAMLY_API_TOKEN) return FAMLY_API_TOKEN;
     return famly_ef_get_setting('api_token');

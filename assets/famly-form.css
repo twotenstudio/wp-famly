@@ -273,15 +273,8 @@
     .famly-submit { width: 100%; }
 }
 
-/* Honeypot: hidden from people and screen readers, visible to naive bots */
-.famly-hp {
-    position: absolute !important;
-    left: -10000px !important;
-    top: auto !important;
-    width: 1px !important;
-    height: 1px !important;
-    overflow: hidden !important;
-}
+/* Honeypot: display:none so browser/password-manager autofill skips it */
+.famly-hp { display: none !important; }
 
 /* Turnstile ("interaction-only": usually takes no space) */
 .famly-turnstile-wrap { margin-bottom: 0; }

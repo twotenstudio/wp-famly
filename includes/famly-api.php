@@ -101,6 +101,27 @@ function famly_ef_list_sites($token) {
 }
 
 /**
+ * Read-only check that a token can see a site and has the enquiries
+ * permission there. Selects only __typename, so no enquiry data comes back.
+ *
+ * @return array { sees_site: bool|null, site_title: string, token_sites: array, enquiries: bool, error: string }
+ */
+function famly_ef_check_site_access($token, $site_id) {
+    $sites = famly_ef_list_sites($token);
+    $r     = famly_ef_graphql(
+        'query CheckEnquiryAccess($ids: [SiteId!]!) { inquiries { listBySiteIdsPaginated(siteIds: $ids, pageSize: 1) { __typename } } }',
+        ['ids' => [$site_id]], $token, 15
+    );
+    return [
+        'sees_site'   => $sites['ok'] ? isset($sites['sites'][$site_id]) : null,
+        'site_title'  => $sites['sites'][$site_id] ?? '',
+        'token_sites' => $sites['sites'],
+        'enquiries'   => $r['ok'],
+        'error'       => $r['ok'] ? '' : $r['error'],
+    ];
+}
+
+/**
  * Check an InquiryInput's shape against Famly's schema WITHOUT creating
  * anything: the request is sent with no token, so Famly coerces the variables
  * (400 if a field is wrong) and then refuses with "Not authorized" (input OK).
