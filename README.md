@@ -77,10 +77,9 @@ Famly doesn't email the nursery when a family enquires, and it has no enquiry we
 - **First check:** the first check for a nursery only records the enquiries already there, so the backlog isn't emailed.
 - **Which enquiries:** by default only online enquiries trigger an email. That means Famly forms and lead sites (booking source `WEBSITE`, `CHILDCARE_SITE`, `DAYNURSERIES_SITE`, `NUURI_SITE`, `FACEBOOK`, or "created through registration form"), not ones staff add by hand or import. A setting switches this to every new enquiry.
 - **No double emails:** enquiries this plugin created itself (API form mode) are skipped, because they were emailed on submission.
-- **What's in the email:** it includes as much as the token can read.
-  - **Manage enquiries** only: the time, status, booking source and a link to the nursery's Famly enquiries.
-  - **View forms and responses:** the full form answers (child, parent, start date, custom questions, tour booking), matched to the enquiry by submission time.
-  - **View child information** and **View contact details:** names, date of birth and contact details from the enquiry.
+- **What's in the email:** it's kept short: subject "New enquiry – Surrey Quays", then the nursery, the enquirer's name and email, and a link to the nursery's Famly enquiries. Reply-To is set to the enquirer.
+  - The name and email come from the enquiry's contact (needs **View child information** and **View contact details**), or else from the matched Famly form answers (needs **View forms and responses**).
+  - With **Manage enquiries** only, they show as "not available", with a one-line hint to check Famly.
 - **Failures:** after 3 failed checks in a row (usually an expired or revoked token), one "ACTION NEEDED" email goes out. A "working again" email follows when it recovers.
 - **Status:** **Famly Enquiries** in wp-admin shows the last check, the last new enquiry, any errors, and a **Check Famly now** button.
 
@@ -119,6 +118,9 @@ wp famly-enquiry retry <id>        # send a stored enquiry to Famly
 The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
 
 ## Changelog
+
+### 1.1.1
+- The new-enquiry alert email is now short: "New enquiry – <nursery>", then the nursery, the enquirer's name and email, and a Famly link, with Reply-To set to the enquirer. The child, phone, tour, form answers and notes are no longer included. The failure and recovery emails are unchanged.
 
 ### 1.1.0
 - New-enquiry alerts: checks each nursery's Famly enquiries every 10 minutes and emails new ones (with form answers when the token can read them). Includes first-run seeding, no double emails for this site's own enquiries, a failure alert after 3 failed checks, a dashboard status panel, a "Check Famly now" button and `wp famly-enquiry poll`.

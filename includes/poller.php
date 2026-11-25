@@ -331,62 +331,59 @@ function famly_ef_poll_recipients(array $site, $include_alert_list) {
     return array_values(array_unique(array_filter($list, 'is_email')));
 }
 
-/** Plain-text body + headers for a new Famly enquiry (no sending). */
-function famly_ef_build_new_inquiry_email(array $site, array $inq, $answers) {
-    $child   = trim((string) ($inq['child']['name']['fullName'] ?? ''));
+/** Short nursery name for subjects: the key, humanised ("surrey-quays" -> "Surrey Quays"). */
+function famly_ef_site_short_name(array $site) {
+    return ucwords(str_replace(['-', '_'], ' ', (string) $site['key']));
+}
+
+/**
+ * The enquirer's name and email: from the enquiry's contact when the token can
+ * read it, otherwise from the matched Famly form answers.
+ *
+ * @return array { name: string, email: string }
+ */
+function famly_ef_enquirer(array $inq, $answers) {
     $contact = $inq['child']['contacts'][0] ?? null;
-    $answers = is_array($answers) ? $answers : [];
+    $name    = trim((string) ($contact['name']['fullName'] ?? ''));
+    $email   = trim((string) ($contact['email'] ?? ''));
 
-    // Fall back to the form answers for names when the token can't read the child.
-    if ($child === '') {
-        $parts = [];
-        foreach ($answers as $label => $value) {
-            if (preg_match('/^child\b[^:]*:.*name/i', $label) || preg_match('/^child\'?s? name$/i', $label)) $parts[] = $value;
+    if (is_array($answers)) {
+        if ($name === '') {
+            $parts = [];
+            foreach ($answers as $label => $value) {
+                // "New contact: First name", "Parent: Last name"... but not the child's
+                if (preg_match('/^(?!child)[^:]+:\s*(first |last |full )?name$/i', $label) && !is_email($value)) $parts[] = $value;
+            }
+            $name = trim(implode(' ', $parts));
         }
-        $child = trim(implode(' ', $parts));
-    }
-
-    $subject = 'New Tour Enquiry: ' . ($child !== '' ? $child : 'new family') . ' (' . $site['label'] . ')';
-
-    $lines = [
-        'Received'      => wp_date('D d/m/Y H:i', strtotime($inq['createdAt'])),
-        'Nursery'       => $site['label'],
-        'How they got in touch' => ucwords(strtolower(str_replace('_', ' ', (string) $inq['bookingSource']))),
-        'Source'        => ucwords(strtolower(str_replace('_', ' ', (string) $inq['source']))),
-    ];
-    if ($child !== '') $lines['Child'] = $child;
-    if (!empty($inq['child']['birthday'])) $lines['Child DOB'] = wp_date('d/m/Y', strtotime($inq['child']['birthday'] . ' 12:00'));
-    if ($contact) {
-        $lines['Parent'] = $contact['name']['fullName'] ?? '';
-        $lines['Email']  = $contact['email'] ?? '';
-        foreach ((array) ($contact['phoneNumbers'] ?? []) as $p) {
-            $lines['Phone (' . strtolower($p['phoneType'] ?? '') . ')'] = $p['value'] ?? '';
+        if ($email === '') {
+            foreach ($answers as $value) {
+                if (is_email($value)) { $email = $value; break; }
+            }
         }
     }
-    foreach ((array) $inq['actions'] as $a) {
-        if (($a['type'] ?? '') === 'SHOWAROUND' && !empty($a['due'])) $lines['Tour booked'] = wp_date('D d/m/Y H:i', strtotime($a['due']));
-    }
+    return ['name' => $name, 'email' => is_email($email) ? $email : ''];
+}
 
-    $body = "A new enquiry has arrived in Famly for {$site['label']}.\n\n";
-    foreach ($lines as $label => $value) {
-        if ($value !== '' && $value !== null) $body .= $label . ': ' . $value . "\n";
+/** Plain-text email for a new Famly enquiry: nursery, enquirer name and email, Famly link (no sending). */
+function famly_ef_build_new_inquiry_email(array $site, array $inq, $answers) {
+    $who = famly_ef_enquirer($inq, $answers);
+
+    $subject = 'New enquiry – ' . famly_ef_site_short_name($site);
+    $body    = "A new enquiry has come in through Famly.\n\n"
+             . 'Nursery: ' . $site['label'] . "\n"
+             . 'Name: ' . ($who['name'] !== '' ? $who['name'] : 'not available') . "\n"
+             . 'Email: ' . ($who['email'] !== '' ? $who['email'] : 'not available') . "\n";
+    if ($who['name'] === '' && $who['email'] === '') {
+        $body .= "\nThe enquirer's details couldn't be read from Famly; please check the enquiry in Famly.\n";
     }
-    if ($answers) {
-        $body .= "\nForm answers:\n";
-        foreach ($answers as $label => $value) $body .= '- ' . $label . ': ' . $value . "\n";
-    }
-    if (trim((string) $inq['note']) !== '') $body .= "\nNote:\n" . trim($inq['note']) . "\n";
-    if ($child === '' && !$contact && !$answers) {
-        $body .= "\nThe family's details aren't included because the website's Famly API token can't read them.\n"
-               . "(Give the token \"View forms and responses\", or \"View child information\" and \"View contact details\", to include them.)\n";
-    }
-    $body .= "\nOpen the enquiries in Famly: " . famly_ef_famly_inquiries_url($site)
-           . "\n\n---\nSent by the website, which checks Famly for new enquiries every 10 minutes."
-           . "\nAlert settings: " . admin_url('admin.php?page=famly-enquiry-settings');
+    $body .= "\nView it in Famly: " . famly_ef_famly_inquiries_url($site) . "\n";
 
     $headers = ['Content-Type: text/plain; charset=UTF-8'];
-    $email   = $contact['email'] ?? ($answers ? (array_values(array_filter($answers, 'is_email'))[0] ?? '') : '');
-    if ($email && is_email($email)) $headers[] = 'Reply-To: <' . $email . '>';
+    if ($who['email'] !== '') {
+        $reply_name = trim(preg_replace('/[\r\n<>"]+/', '', $who['name']));
+        $headers[]  = 'Reply-To: ' . ($reply_name !== '' ? $reply_name . ' ' : '') . '<' . $who['email'] . '>';
+    }
 
     return ['subject' => $subject, 'body' => $body, 'headers' => $headers];
 }
