@@ -70,6 +70,28 @@ Give it a publisher name such as "Website", a long expiry, and the **Enrolment â
 
 One per line, in this form: `Question | select | Option A; Option B`, `Question | checkbox* | Mon; Tue` (`*` = required) or `Question | text`. A nursery can have its own list. The answers go into the Famly note and the emails.
 
+## New-enquiry alerts from Famly
+
+Famly doesn't email the nursery when a family enquires, and it has no enquiry webhooks. So the plugin checks each nursery's Famly enquiries every 10 minutes (`inquiries.listBySiteIdsPaginated`, newest first) and emails anything new to the notification email, plus the nursery's extra address.
+
+- **First check:** the first check for a nursery only records the enquiries already there, so the backlog isn't emailed.
+- **Which enquiries:** by default only online enquiries trigger an email. That means Famly forms and lead sites (booking source `WEBSITE`, `CHILDCARE_SITE`, `DAYNURSERIES_SITE`, `NUURI_SITE`, `FACEBOOK`, or "created through registration form"), not ones staff add by hand or import. A setting switches this to every new enquiry.
+- **No double emails:** enquiries this plugin created itself (API form mode) are skipped, because they were emailed on submission.
+- **What's in the email:** it includes as much as the token can read.
+  - **Manage enquiries** only: the time, status, booking source and a link to the nursery's Famly enquiries.
+  - **View forms and responses:** the full form answers (child, parent, start date, custom questions, tour booking), matched to the enquiry by submission time.
+  - **View child information** and **View contact details:** names, date of birth and contact details from the enquiry.
+- **Failures:** after 3 failed checks in a row (usually an expired or revoked token), one "ACTION NEEDED" email goes out. A "working again" email follows when it recovers.
+- **Status:** **Famly Enquiries** in wp-admin shows the last check, the last new enquiry, any errors, and a **Check Famly now** button.
+
+**Scheduling:** it runs from WP-Cron (`famly_ef_poll`, every 10 minutes). WP-Cron only runs when the site gets traffic, and page caching reduces that, so use a server cron as well, for example:
+
+```
+*/5 * * * * cd /path/to/webapp && wp cron event run --due-now --quiet
+```
+
+or `wp famly-enquiry poll --quiet` directly. A lock stops overlapping runs.
+
 ## Tracking
 
 | Event (`dataLayer`) | When |
@@ -85,6 +107,7 @@ All events carry `nursery`. The AJAX action is `famly_submit_enquiry`.
 
 ```
 wp famly-enquiry status            # config + counts, no personal data
+wp famly-enquiry poll [--dry-run] [--seed]  # check Famly for new enquiries and email them
 wp famly-enquiry check             # per nursery: does its token see its site, with the enquiries permission? (read-only)
 wp famly-enquiry sites             # Famly sites visible to the shared token
 wp famly-enquiry dry-run --site=â€¦  # checks the payload against Famly's schema WITHOUT a token (creates nothing)
@@ -96,6 +119,9 @@ wp famly-enquiry retry <id>        # send a stored enquiry to Famly
 The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
 
 ## Changelog
+
+### 1.1.0
+- New-enquiry alerts: checks each nursery's Famly enquiries every 10 minutes and emails new ones (with form answers when the token can read them). Includes first-run seeding, no double emails for this site's own enquiries, a failure alert after 3 failed checks, a dashboard status panel, a "Check Famly now" button and `wp famly-enquiry poll`.
 
 ### 1.0.1
 - Fix: browser or password-manager autofill could fill the hidden honeypot field, so real enquiries were held and never sent to Famly. The honeypot is now `display:none` with ignore flags, and it only holds an enquiry when Turnstile didn't verify the visitor.

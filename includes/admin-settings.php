@@ -62,6 +62,8 @@ function famly_ef_sanitize_settings($input) {
 
     $out['notify_email']  = sanitize_email($input['notify_email'] ?? '') ?: get_option('admin_email');
     $out['notify_every']  = !empty($input['notify_every']) ? '1' : '0';
+    $out['poll_enabled']  = !empty($input['poll_enabled']) ? '1' : '0';
+    $out['poll_scope']    = ($input['poll_scope'] ?? 'online') === 'all' ? 'all' : 'online';
     $alerts = array_filter(array_map('sanitize_email', array_map('trim', explode(',', (string) ($input['alert_emails'] ?? '')))));
     $out['alert_emails']  = implode(', ', $alerts);
     $out['contact_email'] = sanitize_email($input['contact_email'] ?? '') ?: get_option('admin_email');
@@ -293,6 +295,17 @@ function famly_ef_settings_page() {
                     <p class="description">Extra addresses (comma-separated) for "ACTION NEEDED" emails only.</p></td></tr>
                 <tr><th scope="row">Contact email on errors</th><td><input type="email" name="famly_ef_settings[contact_email]" value="<?php echo esc_attr($s['contact_email']); ?>" class="regular-text">
                     <p class="description">Shown to parents if the form shows an error.</p></td></tr>
+            </table>
+
+            <h2>New-enquiry alerts from Famly</h2>
+            <p>Famly doesn't email you when a family enquires. With this on, the website checks each nursery's Famly enquiries every 10 minutes and emails anything new to the notification email above (plus the nursery's extra address). The first check only records what's already there. Enquiries made with this site's own form are emailed when they're submitted, so they aren't emailed twice.</p>
+            <table class="form-table" role="presentation">
+                <tr><th scope="row">Email new Famly enquiries</th><td><label><input type="checkbox" name="famly_ef_settings[poll_enabled]" value="1"<?php checked($s['poll_enabled'], '1'); ?>> Check Famly every 10 minutes and email new enquiries</label>
+                    <p class="description">Needs each nursery's token to have Enrolment → Manage enquiries. To include the family's details and form answers in the email, also give it Documents → Forms → <strong>View forms and responses</strong> (or Children → View child information and View contact details).</p></td></tr>
+                <tr><th scope="row">Which enquiries</th><td>
+                    <label style="display:block;"><input type="radio" name="famly_ef_settings[poll_scope]" value="online"<?php checked($s['poll_scope'], 'online'); ?>> Online enquiries only: Famly forms and lead sites (childcare.co.uk, daynurseries.co.uk, Nuuri, Facebook)</label>
+                    <label style="display:block;"><input type="radio" name="famly_ef_settings[poll_scope]" value="all"<?php checked($s['poll_scope'], 'all'); ?>> Every new enquiry, including ones staff add by hand or import</label>
+                </td></tr>
             </table>
 
             <h2>"How did you hear about us?" options</h2>

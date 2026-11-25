@@ -70,6 +70,8 @@ function famly_ef_default_settings() {
         'sites'              => [],
         'notify_email'       => get_option('admin_email'),
         'notify_every'       => '1',
+        'poll_enabled'       => '1',
+        'poll_scope'         => 'online',
         'alert_emails'       => '',
         'contact_email'      => get_option('admin_email'),
         'sources_text'       => famly_ef_default_sources_text(),

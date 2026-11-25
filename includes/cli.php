@@ -1,6 +1,6 @@
 <?php
 /**
- * WP-CLI: wp famly-enquiry <status|check|sites|dry-run|retry>
+ * WP-CLI: wp famly-enquiry <status|check|poll|sites|dry-run|retry>
  */
 
 if (!defined('ABSPATH')) exit;
@@ -78,6 +78,41 @@ class Famly_EF_CLI {
         }
         WP_CLI\Utils\format_items('table', $items, ['nursery', 'mode', 'token', 'sees_site', 'enquiries']);
         $bad ? WP_CLI::error($bad . ' nursery/nurseries cannot create enquiries in Famly.') : WP_CLI::success('Every nursery can create enquiries in Famly.');
+    }
+
+    /**
+     * Check Famly for new enquiries and email them (what the 10-minute schedule runs).
+     * For a server cron: cd <webapp> && wp famly-enquiry poll --quiet
+     *
+     * [--dry-run]
+     * : Fetch and report only: no emails, nothing saved. Output has no personal data.
+     *
+     * [--seed]
+     * : Record the enquiries already in Famly as seen, without emailing them.
+     */
+    public function poll($args, $assoc) {
+        $dry  = !empty($assoc['dry-run']);
+        $seed = !empty($assoc['seed']);
+        if (famly_ef_get_setting('poll_enabled', '1') !== '1' && !$dry) WP_CLI::error('New-enquiry alerts are switched off in settings.');
+        $results = famly_ef_poll_all(['dry_run' => $dry, 'seed' => $seed]);
+        if (!empty($results['locked'])) WP_CLI::warning('Another check is running; skipped.');
+        $failed = 0;
+        foreach ($results as $key => $r) {
+            if ($key === 'locked') continue;
+            if (!$r['ok']) { $failed++; WP_CLI::warning("{$key}: failed: {$r['error']}"); continue; }
+            if (isset($r['would_seed']))      WP_CLI::log("{$key}: not checked before; a real run would record {$r['would_seed']} existing enquiries without emailing.");
+            elseif (isset($r['seeded_now']))  WP_CLI::log("{$key}: recorded {$r['seeded_now']} existing enquiries (no emails).");
+            elseif ($dry) {
+                WP_CLI::log("{$key}: " . count($r['new']) . " new would be emailed, {$r['skipped']} skipped.");
+                foreach ($r['new'] as $inq) {
+                    WP_CLI::log('   - ' . substr($inq['id'], 0, 8) . '… ' . $inq['createdAt'] . ' via ' . ($inq['bookingSource'] ?: '-')
+                        . ' | child details: ' . (!empty($inq['child']) ? 'yes' : 'no') . ' | form answers: ' . count($r['answers'][$inq['id']] ?? []));
+                }
+            } else {
+                WP_CLI::log("{$key}: {$r['new']} new emailed, {$r['skipped']} skipped.");
+            }
+        }
+        if ($failed) WP_CLI::halt(1);
     }
 
     /**

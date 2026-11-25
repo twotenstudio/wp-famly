@@ -16,9 +16,15 @@ const FAMLY_EF_STATUSES = [
 /** Enquiries that need someone to act: failed, or stuck "sending" for 15+ minutes. */
 function famly_ef_attention_count() {
     global $wpdb;
-    if (!famly_ef_table_exists()) return 0;
+    $poll_failing = 0;
+    if (function_exists('famly_ef_poll_site_state')) {
+        foreach (famly_ef_sites() as $site) {
+            if (famly_ef_poll_site_state($site['key'])['failures'] >= FAMLY_EF_POLL_FAIL_LIMIT) $poll_failing++;
+        }
+    }
+    if (!famly_ef_table_exists()) return $poll_failing;
     $cutoff = wp_date('Y-m-d H:i:s', time() - 15 * MINUTE_IN_SECONDS);
-    return (int) $wpdb->get_var($wpdb->prepare(
+    return $poll_failing + (int) $wpdb->get_var($wpdb->prepare(
         'SELECT COUNT(*) FROM ' . famly_ef_table() . " WHERE status = 'failed' OR (status = 'pending' AND created_at < %s)", $cutoff
     ));
 }
@@ -121,7 +127,10 @@ function famly_ef_dashboard_page() {
         <?php if (!empty($_GET['famly_msg'])) : ?><div class="notice notice-success is-dismissible"><p><?php echo esc_html(wp_unslash($_GET['famly_msg'])); ?></p></div><?php endif; ?>
         <?php if (!empty($_GET['famly_err'])) : ?><div class="notice notice-error is-dismissible"><p><?php echo esc_html(wp_unslash($_GET['famly_err'])); ?></p></div><?php endif; ?>
 
-        <p>Enquiries from on-page forms (API form mode). Enquiries made on Famly's own form (link mode) are only in Famly.</p>
+        <?php famly_ef_render_poll_status(); ?>
+
+        <h2>Enquiries submitted on this website</h2>
+        <p>Enquiries from on-page forms (API form mode). Enquiries made on Famly's own form (link mode) are only in Famly; the alerts above email those.</p>
 
         <ul class="subsubsub">
             <li><a href="<?php echo esc_url($base); ?>"<?php echo $status === '' ? ' class="current"' : ''; ?>>All</a> |</li>
@@ -190,6 +199,52 @@ function famly_ef_dashboard_page() {
 
         <?php if ($pages > 1) : ?>
             <div class="tablenav bottom"><div class="tablenav-pages"><?php echo paginate_links(['base' => add_query_arg('paged', '%#%'), 'format' => '', 'current' => $current, 'total' => $pages]); ?></div></div>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
+/** Status of the new-enquiry alerts (last check, last new enquiry, last error). */
+function famly_ef_render_poll_status() {
+    $enabled = famly_ef_get_setting('poll_enabled', '1') === '1';
+    $next    = wp_next_scheduled(FAMLY_EF_POLL_HOOK);
+    $ago     = function ($ts) { return $ts ? sprintf('%s ago (%s)', human_time_diff((int) $ts), wp_date('d/m H:i', (int) $ts)) : 'never'; };
+    ?>
+    <div class="postbox" style="padding:12px 16px;margin-top:16px;max-width:1100px;">
+        <h2 style="margin:0 0 8px;padding:0;">New-enquiry alerts from Famly</h2>
+        <?php if (!$enabled) : ?>
+            <p>Off. Turn on "Email new Famly enquiries" in <a href="<?php echo esc_url(admin_url('admin.php?page=famly-enquiry-settings')); ?>">Settings</a>.</p>
+        <?php else : ?>
+            <p style="margin-top:0;">The website checks Famly every 10 minutes and emails new enquiries to <?php echo esc_html(famly_ef_notify_email()); ?> (plus each nursery's extra address).
+            Next scheduled check: <?php echo $next ? esc_html(human_time_diff($next) . ($next < time() ? ' overdue' : '')) : 'not scheduled'; ?>.</p>
+            <table class="widefat striped">
+                <thead><tr><th>Nursery</th><th>Last checked</th><th>Last new enquiry emailed</th><th>Status</th></tr></thead>
+                <tbody>
+                <?php foreach (famly_ef_sites() as $site) : $st = famly_ef_poll_site_state($site['key']); ?>
+                    <tr>
+                        <td><?php echo esc_html($site['label']); ?></td>
+                        <td><?php echo esc_html($ago($st['last_checked'])); ?></td>
+                        <td><?php echo esc_html($st['last_new'] ? $ago($st['last_new']) . ' — ' . (int) $st['last_new_count'] . ' new' : 'none yet'); ?></td>
+                        <td><?php
+                            if ($st['failures'] > 0) {
+                                echo '<span style="color:#d63638;font-weight:600;">&#10007; ' . (int) $st['failures'] . ' failed check(s) in a row</span><br><small>' . esc_html($st['last_error']) . '</small>';
+                            } elseif ($st['seeded']) {
+                                echo '<span style="color:#1e8e3e;font-weight:600;">&#10003; Working</span>';
+                                if ($st['last_error']) echo '<br><small>Last error ' . esc_html($ago($st['last_error_at'])) . ': ' . esc_html($st['last_error']) . '</small>';
+                            } else {
+                                echo 'Waiting for first check';
+                            }
+                        ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top:10px;">
+                <input type="hidden" name="action" value="famly_ef_poll_now">
+                <?php wp_nonce_field('famly_ef_poll_now'); ?>
+                <?php submit_button('Check Famly now', 'secondary', 'submit', false); ?>
+                <span class="description" style="margin-left:8px;">Emails anything new, the same as the scheduled check.</span>
+            </form>
         <?php endif; ?>
     </div>
     <?php
