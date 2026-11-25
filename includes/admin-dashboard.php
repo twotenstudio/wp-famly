@@ -235,7 +235,10 @@ function famly_ef_render_poll_status() {
                         <td><?php echo esc_html($ago($st['last_checked'])); ?></td>
                         <td><?php echo esc_html($st['last_new'] ? $ago($st['last_new']) . ' — ' . (int) $st['last_new_count'] . ' new' : 'none yet'); ?></td>
                         <td><?php
-                            if ($st['failures'] > 0) {
+                            $waiting = famly_ef_poll_waiting_reason($site);
+                            if ($waiting !== '') {
+                                echo '<span style="color:#757575;font-weight:600;">' . esc_html($waiting) . '</span>';
+                            } elseif ($st['failures'] > 0) {
                                 echo '<span style="color:#d63638;font-weight:600;">&#10007; ' . (int) $st['failures'] . ' failed check(s) in a row</span><br><small>' . esc_html($st['last_error']) . '</small>';
                             } elseif ($st['seeded']) {
                                 echo '<span style="color:#1e8e3e;font-weight:600;">&#10003; Working</span>';

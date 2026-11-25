@@ -57,6 +57,7 @@ function famly_ef_sanitize_settings($input) {
             'notify_email'    => $notify,
             'api_token'       => famly_ef_keep_secret(sanitize_text_field($row['api_token'] ?? ''), $old_sites[$key]['api_token'] ?? '', !empty($row['api_token_clear'])),
             'extra_questions' => sanitize_textarea_field($row['extra_questions'] ?? ''),
+            'poll'            => !empty($row['poll']) ? '1' : '0',
         ];
     }
 
@@ -235,7 +236,7 @@ function famly_ef_settings_page() {
             <strong>Link</strong> mode shows a button that opens the nursery's Famly enquiry form (parents can book a tour there; no API needed).
             <strong>API form</strong> mode shows the on-page form and creates the enquiry through the Famly API (needs a token and site ID).</p>
             <table class="widefat striped" style="max-width:1300px;">
-                <thead><tr><th>Key</th><th>Name (emails and dashboard)</th><th>Mode</th><th>Famly form link (link mode)</th><th>Famly site ID (API mode)</th><th>Extra notification email</th><th>Own API token (optional)</th><th>Shortcode</th></tr></thead>
+                <thead><tr><th>Key</th><th>Name (emails and dashboard)</th><th>Mode</th><th>Famly form link (link mode)</th><th>Famly site ID (API mode)</th><th>Extra notification email</th><th>Own API token (optional)</th><th>New-enquiry alerts</th><th>Shortcode</th></tr></thead>
                 <tbody>
                 <?php foreach (array_merge($sites, [famly_ef_blank_site()]) as $i => $site) : $n = 'famly_ef_settings[sites][' . $i . ']'; ?>
                     <tr>
@@ -246,6 +247,7 @@ function famly_ef_settings_page() {
                         <td><input type="text" name="<?php echo esc_attr($n); ?>[site_id]" value="<?php echo esc_attr($site['site_id']); ?>" style="width:290px;font-family:monospace;" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></td>
                         <td><input type="email" name="<?php echo esc_attr($n); ?>[notify_email]" value="<?php echo esc_attr($site['notify_email']); ?>" style="width:100%;"></td>
                         <td><?php $site['key'] !== '' ? famly_ef_secret_field($n . '[api_token]', $site['api_token'] ?? '', famly_ef_site_token_constant($site['key'])) : famly_ef_secret_field($n . '[api_token]', ''); ?></td>
+                        <td><label><input type="checkbox" name="<?php echo esc_attr($n); ?>[poll]" value="1"<?php checked($site['poll'] ?? '1', '1'); ?>> Check this nursery</label></td>
                         <td><?php if ($site['key'] !== '') echo '<code>[famly_enquiry_form site="' . esc_html($site['key']) . '"]</code>'; ?>
                             <input type="hidden" name="<?php echo esc_attr($n); ?>[extra_questions]" value="<?php echo esc_attr($site['extra_questions']); ?>" class="famly-ef-site-extra" data-row="<?php echo (int) $i; ?>"></td>
                     </tr>

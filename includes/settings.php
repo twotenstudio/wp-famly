@@ -60,7 +60,18 @@ function famly_ef_default_sources_text() {
 
 /** A blank nursery row. mode: "link" (button to the Famly form) or "form" (on-page form sent through the API). */
 function famly_ef_blank_site() {
-    return ['key' => '', 'label' => '', 'mode' => 'link', 'form_url' => '', 'site_id' => '', 'notify_email' => '', 'api_token' => '', 'extra_questions' => ''];
+    return ['key' => '', 'label' => '', 'mode' => 'link', 'form_url' => '', 'site_id' => '', 'notify_email' => '', 'api_token' => '', 'extra_questions' => '', 'poll' => '1'];
+}
+
+/**
+ * Why a nursery isn't checked for new Famly enquiries, or '' if it is.
+ * These are setup states, not failures: they never trigger the failure alert.
+ */
+function famly_ef_poll_waiting_reason(array $site) {
+    if (($site['poll'] ?? '1') !== '1')   return 'Off for this nursery';
+    if (!famly_ef_token_for_site($site))   return 'Waiting for an API token';
+    if (empty($site['site_id']))           return 'Waiting for the Famly site ID';
+    return '';
 }
 
 function famly_ef_default_settings() {

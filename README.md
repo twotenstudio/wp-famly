@@ -81,6 +81,7 @@ Famly doesn't email the nursery when a family enquires, and it has no enquiry we
 - **What's in the email:** it's kept short: subject "New enquiry – Surrey Quays", then the nursery, the enquirer's name and email, and a link to the nursery's Famly enquiries. Reply-To is set to the enquirer.
   - The name and email come from the enquiry's contact (needs **View child information** and **View contact details**), or else from the matched Famly form answers (needs **View forms and responses**).
   - With **Manage enquiries** only, they show as "not available", with a one-line hint to check Famly.
+- **Per nursery:** each nursery has a "Check this nursery" switch. A nursery that's switched off, or has no token or site ID yet, is skipped and shown as waiting, not as failing.
 - **Failures:** after 3 failed checks in a row (usually an expired or revoked token), one "ACTION NEEDED" email goes out. A "working again" email follows when it recovers.
 - **What's stored:** only keyed hashes of the Famly enquiry IDs already seen (so nothing is emailed twice), timestamps, counts and a fixed error description. Famly's response text and enquiry data are never stored.
 - **Status:** **Famly Enquiries** in wp-admin shows the last check, the last new enquiry, any errors, and a **Check Famly now** button.
@@ -120,6 +121,9 @@ wp famly-enquiry retry <id>        # send a stored enquiry to Famly
 The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
 
 ## Changelog
+
+### 1.3.0
+- Per-nursery "Check this nursery" switch for new-enquiry alerts. A nursery that's switched off, or has no API token or site ID yet, is skipped quietly and shows "Off for this nursery" or "Waiting for an API token" on the dashboard. It never counts as a failed check or triggers the failure alert.
 
 ### 1.2.0
 - Nothing personal is kept: on-page enquiries have their details removed as soon as they've been sent to Famly or emailed, with a 5-minute clean-up as a backstop. Spam-held entries store no details. Rows from before 1.2.0 are untouched unless purged with `--include-existing`.

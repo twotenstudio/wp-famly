@@ -100,7 +100,8 @@ class Famly_EF_CLI {
         foreach ($results as $key => $r) {
             if ($key === 'locked') continue;
             if (!$r['ok']) { $failed++; WP_CLI::warning("{$key}: failed: {$r['error']}"); continue; }
-            if (isset($r['would_seed']))      WP_CLI::log("{$key}: not checked before; a real run would record {$r['would_seed']} existing enquiries without emailing.");
+            if (isset($r['waiting']))         WP_CLI::log("{$key}: skipped ({$r['waiting']}).");
+            elseif (isset($r['would_seed']))  WP_CLI::log("{$key}: not checked before; a real run would record {$r['would_seed']} existing enquiries without emailing.");
             elseif (isset($r['seeded_now']))  WP_CLI::log("{$key}: recorded {$r['seeded_now']} existing enquiries (no emails).");
             elseif ($dry) {
                 WP_CLI::log("{$key}: " . count($r['new']) . " new would be emailed, {$r['skipped']} skipped.");
@@ -137,9 +138,9 @@ class Famly_EF_CLI {
         foreach (famly_ef_sites() as $s) {
             $items[] = ['key' => $s['key'], 'label' => $s['label'], 'mode' => $s['mode'], 'site_id' => $s['site_id'] ?: '-',
                         'form_url' => $s['form_url'] ? 'set' : '-', 'token' => famly_ef_token_for_site($s) ? 'yes' : 'no',
-                        'extra_questions' => count(famly_ef_extra_questions($s))];
+                        'extra_questions' => count(famly_ef_extra_questions($s)), 'alerts' => famly_ef_poll_waiting_reason($s) ?: 'checked'];
         }
-        WP_CLI\Utils\format_items('table', $items, ['key', 'label', 'mode', 'site_id', 'form_url', 'token', 'extra_questions']);
+        WP_CLI\Utils\format_items('table', $items, ['key', 'label', 'mode', 'site_id', 'form_url', 'token', 'extra_questions', 'alerts']);
         global $wpdb;
         if (famly_ef_table_exists()) {
             $counts = $wpdb->get_results('SELECT status, COUNT(*) AS n FROM ' . famly_ef_table() . ' GROUP BY status', ARRAY_A);

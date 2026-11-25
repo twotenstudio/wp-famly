@@ -123,15 +123,18 @@ function famly_ef_poll_all(array $opts = []) {
 }
 
 function famly_ef_poll_site(array $site, array $opts) {
-    $key   = $site['key'];
+    $key = $site['key'];
+
+    // Switched off, or not set up yet: skip quietly (not a failure, no alert).
+    $waiting = famly_ef_poll_waiting_reason($site);
+    if ($waiting !== '') return ['ok' => true, 'waiting' => $waiting, 'new' => 0];
+
     $st    = famly_ef_poll_site_state($key);
     $now   = time();
     $token = famly_ef_token_for_site($site);
 
     $st['last_checked'] = $now;
     $error = '';
-    if (!$token)                $error = 'No Famly API token for this nursery';
-    elseif (!$site['site_id'])  $error = 'No Famly site ID for this nursery';
 
     $inquiries = [];
     if ($error === '') {
@@ -440,7 +443,7 @@ add_action('admin_post_famly_ef_poll_now', function () {
     $msg = [];
     foreach ($r as $key => $res) {
         if ($key === 'locked') { $msg[] = 'A check is already running.'; continue; }
-        $msg[] = $key . ': ' . (!$res['ok'] ? 'failed (' . $res['error'] . ')' : (isset($res['seeded_now']) ? 'first check, recorded ' . $res['seeded_now'] . ' existing enquiries' : $res['new'] . ' new'));
+        $msg[] = $key . ': ' . (!$res['ok'] ? 'failed (' . $res['error'] . ')' : (isset($res['waiting']) ? strtolower($res['waiting']) : (isset($res['seeded_now']) ? 'first check, recorded ' . $res['seeded_now'] . ' existing enquiries' : $res['new'] . ' new')));
     }
     wp_safe_redirect(add_query_arg('famly_msg', rawurlencode('Checked Famly: ' . implode('; ', $msg)), admin_url('admin.php?page=famly-enquiries')));
     exit;
