@@ -131,6 +131,7 @@ function famly_ef_dashboard_page() {
 
         <h2>Enquiries submitted on this website</h2>
         <p>Enquiries from on-page forms (API form mode). Enquiries made on Famly's own form (link mode) are only in Famly; the alerts above email those.</p>
+        <p><strong>Details aren't kept:</strong> as soon as an enquiry has been sent to Famly or emailed, its personal details are removed from WordPress (a 5-minute clean-up catches anything left). Only the date, nursery and outcome stay here.</p>
 
         <ul class="subsubsub">
             <li><a href="<?php echo esc_url($base); ?>"<?php echo $status === '' ? ' class="current"' : ''; ?>>All</a> |</li>
@@ -153,24 +154,32 @@ function famly_ef_dashboard_page() {
             <tbody>
             <?php if (!$entries) : ?>
                 <tr><td colspan="10">No enquiries found.</td></tr>
-            <?php else : foreach ($entries as $e) : $id = (int) $e['id']; $date = function ($v, $f = 'd/m/Y') { return $v ? wp_date($f, strtotime($v)) : '—'; }; ?>
+            <?php else : foreach ($entries as $e) : $id = (int) $e['id']; $date = function ($v, $f = 'd/m/Y') { return $v ? wp_date($f, strtotime($v)) : '—'; }; $anon = famly_ef_is_anonymised($e); ?>
                 <tr>
                     <td><?php echo $id; ?></td>
                     <td><?php echo esc_html($e['site_label']); ?></td>
+                    <?php if ($anon) : ?>
+                    <td colspan="5"><em>Details removed <?php echo esc_html($date($e['anonymised_at'], 'd/m/Y H:i')); ?></em></td>
+                    <?php else : ?>
                     <td><strong><?php echo esc_html(trim($e['child_first_name'] . ' ' . $e['child_last_name'])); ?></strong><br><small>DOB: <?php echo esc_html($date($e['child_dob'])); ?></small></td>
                     <td><?php echo esc_html(trim($e['parent_first_name'] . ' ' . $e['parent_last_name'])); ?></td>
                     <td><a href="mailto:<?php echo esc_attr($e['parent_email']); ?>"><?php echo esc_html($e['parent_email']); ?></a></td>
                     <td><?php echo esc_html($e['phone']); ?></td>
                     <td><?php echo esc_html($date($e['start_date'])); ?></td>
+                    <?php endif; ?>
                     <td><?php echo famly_ef_status_badge($e['status']); ?><?php if ($e['status_reason'] !== '' && $e['status'] !== 'sent') echo '<br><small>' . esc_html(mb_strimwidth($e['status_reason'], 0, 90, '…')) . '</small>'; ?></td>
                     <td><?php echo esc_html($date($e['created_at'], 'd/m/Y H:i')); ?></td>
                     <td>
-                        <a href="#" onclick="var d=document.getElementById('famly-ef-d-<?php echo $id; ?>');d.classList.toggle('visible');this.textContent=d.classList.contains('visible')?'Hide':'View';return false;">View</a>
-                        <?php if (in_array($e['status'], ['failed', 'held', 'pending'], true)) : ?>
-                            | <a href="<?php echo esc_url(famly_ef_action_url('retry', $id)); ?>" onclick="return confirm('Send enquiry #<?php echo $id; ?> to Famly now?');">Send to Famly</a>
-                            | <a href="<?php echo esc_url(famly_ef_action_url('handled', $id)); ?>">Added by hand</a>
+                        <?php if (!$anon) : ?>
+                        <a href="#" onclick="var d=document.getElementById('famly-ef-d-<?php echo $id; ?>');d.classList.toggle('visible');this.textContent=d.classList.contains('visible')?'Hide':'View';return false;">View</a> |
                         <?php endif; ?>
-                        | <a href="<?php echo esc_url(famly_ef_action_url('delete', $id)); ?>" onclick="return confirm('Delete enquiry #<?php echo $id; ?>? This cannot be undone.');" style="color:#a00;">Delete</a>
+                        <?php if (!$anon && in_array($e['status'], ['failed', 'held', 'pending'], true)) : ?>
+                            <a href="<?php echo esc_url(famly_ef_action_url('retry', $id)); ?>" onclick="return confirm('Send enquiry #<?php echo $id; ?> to Famly now?');">Send to Famly</a> |
+                        <?php endif; ?>
+                        <?php if ($e['status'] === 'failed') : ?>
+                            <a href="<?php echo esc_url(famly_ef_action_url('handled', $id)); ?>">Added by hand</a> |
+                        <?php endif; ?>
+                        <a href="<?php echo esc_url(famly_ef_action_url('delete', $id)); ?>" onclick="return confirm('Delete enquiry #<?php echo $id; ?>? This cannot be undone.');" style="color:#a00;">Delete</a>
                     </td>
                 </tr>
                 <tr class="famly-ef-detail"><td colspan="10"><div id="famly-ef-d-<?php echo $id; ?>" class="famly-ef-detail-inner"><dl class="famly-ef-grid">

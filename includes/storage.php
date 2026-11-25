@@ -3,7 +3,10 @@
  * Local enquiry storage and sending a stored enquiry to Famly.
  *
  * Every enquiry is saved here before Famly is called, so nothing is lost
- * if Famly is down, the token has expired or a site ID is missing.
+ * if Famly is down, the token has expired or a site ID is missing. As soon as
+ * it has been sent to Famly or emailed, its personal details are removed
+ * (famly_ef_anonymise_enquiry); a 5-minute clean-up catches anything left.
+ * Only the date, nursery, outcome and a hash of the Famly ID stay.
  *
  * Statuses: pending (being sent), sent, failed (alert emailed, can be retried),
  * held (spam check failed, not sent), manual (staff added it to Famly by hand).
@@ -53,6 +56,7 @@ function famly_ef_create_table() {
         famly_error text,
         attempts smallint(5) unsigned NOT NULL DEFAULT 0,
         last_attempt_at datetime DEFAULT NULL,
+        anonymised_at datetime DEFAULT NULL,
         PRIMARY KEY  (id),
         KEY status (status),
         KEY created_at (created_at)
@@ -93,6 +97,80 @@ function famly_ef_update_enquiry($id, array $data) {
 function famly_ef_get_enquiry($id) {
     global $wpdb;
     return $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . famly_ef_table() . ' WHERE id = %d', (int) $id), ARRAY_A);
+}
+
+// Columns holding the family's details or Famly's response text.
+const FAMLY_EF_PERSONAL_TEXT = ['child_first_name', 'child_last_name', 'child_gender', 'parent_first_name', 'parent_last_name',
+    'parent_email', 'phone', 'postcode', 'source_label', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'page_url'];
+const FAMLY_EF_PERSONAL_NULL = ['child_dob', 'start_date', 'extra_answers', 'famly_error'];
+const FAMLY_EF_PURGE_HOOK    = 'famly_ef_purge';
+
+function famly_ef_is_anonymised(array $row) {
+    return !empty($row['anonymised_at']);
+}
+
+/** Remove an enquiry's personal details, keeping date, nursery, outcome and a hash of the Famly ID. */
+function famly_ef_anonymise_enquiry($id) {
+    $row = famly_ef_get_enquiry($id);
+    if (!$row || famly_ef_is_anonymised($row)) return false;
+    $data = array_fill_keys(FAMLY_EF_PERSONAL_TEXT, '') + array_fill_keys(FAMLY_EF_PERSONAL_NULL, null);
+    $data['consent'] = 0;
+    // Our own wording only (the stored reason could include Famly's text).
+    $data['status_reason'] = $row['status'] === 'failed' ? 'Not sent to Famly; details were in the ACTION NEEDED email'
+        : ($row['status'] === 'held' ? $row['status_reason'] : '');
+    if ($row['famly_inquiry_id'] !== '' && !famly_ef_is_hash($row['famly_inquiry_id'])) {
+        $data['famly_inquiry_id'] = famly_ef_id_hash($row['famly_inquiry_id']); // still lets the poller skip it
+    }
+    $data['anonymised_at'] = current_time('mysql');
+    return famly_ef_update_enquiry($id, $data) !== false;
+}
+
+// ─── Clean-up: nothing personal stays more than a few minutes ─────────
+
+add_filter('cron_schedules', function ($schedules) {
+    $schedules['famly_ef_5min'] = ['interval' => 5 * MINUTE_IN_SECONDS, 'display' => 'Every 5 minutes (Famly enquiry clean-up)'];
+    return $schedules;
+});
+add_action('init', function () {
+    if (!wp_next_scheduled(FAMLY_EF_PURGE_HOOK)) wp_schedule_event(time() + MINUTE_IN_SECONDS, 'famly_ef_5min', FAMLY_EF_PURGE_HOOK);
+});
+add_action(FAMLY_EF_PURGE_HOOK, function () { famly_ef_purge_stale(); });
+register_deactivation_hook(FAMLY_EF_FILE, function () { wp_clear_scheduled_hook(FAMLY_EF_PURGE_HOOK); });
+
+/**
+ * Remove personal details from any enquiry that still has them. A submission
+ * stuck "sending" for 10+ minutes (the request died) gets its ACTION NEEDED
+ * email first, so it isn't lost. Rows that existed before this clean-up was
+ * added (id <= famly_ef_purge_after_id) are left alone unless $include_existing.
+ *
+ * @return array { anonymised: int, alerted: int }
+ */
+function famly_ef_purge_stale($include_existing = false) {
+    global $wpdb;
+    $out = ['anonymised' => 0, 'alerted' => 0];
+    if (!famly_ef_table_exists()) return $out;
+    $table = famly_ef_table();
+
+    $after = get_option('famly_ef_purge_after_id', null);
+    if ($after === null) {
+        $after = (int) $wpdb->get_var("SELECT COALESCE(MAX(id), 0) FROM $table");
+        add_option('famly_ef_purge_after_id', $after, '', false);
+    }
+    $min_id = $include_existing ? 0 : (int) $after;
+
+    $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE anonymised_at IS NULL AND id > %d", $min_id), ARRAY_A);
+    foreach ($rows as $row) {
+        if ($row['status'] === 'pending') {
+            if (strtotime($row['created_at']) > current_time('timestamp') - 10 * MINUTE_IN_SECONDS) continue; // still being sent
+            famly_ef_update_enquiry($row['id'], ['status' => 'failed']);
+            $row['status'] = 'failed';
+            famly_ef_send_failure_alert($row, 'The submission did not finish (the website stopped before it could send it to Famly).');
+            $out['alerted']++;
+        }
+        if (famly_ef_anonymise_enquiry($row['id'])) $out['anonymised']++;
+    }
+    if ($out['anonymised'] || $out['alerted']) famly_ef_log('Clean-up: removed details from ' . $out['anonymised'] . ' enquiry(ies), ' . $out['alerted'] . ' unfinished alerted');
+    return $out;
 }
 
 /** Replace this enquiry's personal details in a message before it is logged or stored. */
@@ -183,7 +261,11 @@ function famly_ef_send_to_famly($id) {
     $row = famly_ef_get_enquiry($id);
     if (!$row) return ['ok' => false, 'error' => 'Enquiry not found', 'inquiry_id' => ''];
     if ($row['famly_inquiry_id'] !== '' || $row['status'] === 'sent') {
-        return ['ok' => false, 'error' => 'Already in Famly (ID ' . $row['famly_inquiry_id'] . ')', 'inquiry_id' => $row['famly_inquiry_id']];
+        $shown = famly_ef_is_hash($row['famly_inquiry_id']) ? '' : ' (ID ' . $row['famly_inquiry_id'] . ')';
+        return ['ok' => false, 'error' => 'Already in Famly' . $shown, 'inquiry_id' => $row['famly_inquiry_id']];
+    }
+    if (famly_ef_is_anonymised($row)) {
+        return ['ok' => false, 'error' => "This enquiry's details were removed from WordPress after the email went out. Add it to Famly from that email.", 'inquiry_id' => ''];
     }
 
     // Use the nursery's current settings, so a retry picks up a newly added site ID or token.

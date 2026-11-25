@@ -111,7 +111,7 @@ function famly_ef_handle_submission() {
     //    rather than lose it.
     $turnstile = famly_ef_verify_turnstile(famly_ef_post('turnstile_token', 2048));
     if ($turnstile === 'fail') {
-        famly_ef_insert_enquiry($data + ['status' => 'held', 'status_reason' => 'Turnstile check failed']);
+        famly_ef_insert_held($data, 'Turnstile check failed');
         famly_ef_log('Held a submission: Turnstile failed (' . $site['key'] . ')');
         wp_send_json_error(['message' => 'We couldn\'t verify you\'re not a robot. Please try again.', 'turnstile' => true]);
     }
@@ -123,7 +123,7 @@ function famly_ef_handle_submission() {
         if ($turnstile === 'pass') {
             famly_ef_log('Honeypot filled but Turnstile passed; treating as a person (' . $site['key'] . ')');
         } else {
-            famly_ef_insert_enquiry($data + ['status' => 'held', 'status_reason' => 'Honeypot field was filled in']);
+            famly_ef_insert_held($data, 'Honeypot field was filled in');
             famly_ef_log('Held a submission: honeypot filled, Turnstile ' . $turnstile . ' (' . $site['key'] . ')');
             wp_send_json_success(['message' => 'Enquiry submitted successfully.', 'nursery' => $site['label']]);
         }
@@ -153,7 +153,22 @@ function famly_ef_handle_submission() {
         famly_ef_send_failure_alert($row, $result['error']);
     }
 
+    // It's in Famly and/or the email has gone: don't keep the family's details here.
+    famly_ef_anonymise_enquiry($id);
+
     wp_send_json_success(['message' => 'Enquiry submitted successfully.', 'nursery' => $site['label']]);
+}
+
+/** Held by a spam check: record only that it happened (no details), for the counts. */
+function famly_ef_insert_held(array $data, $reason) {
+    return famly_ef_insert_enquiry([
+        'site_key'      => $data['site_key'],
+        'site_label'    => $data['site_label'],
+        'famly_site_id' => $data['famly_site_id'],
+        'status'        => 'held',
+        'status_reason' => $reason,
+        'anonymised_at' => current_time('mysql'),
+    ]);
 }
 
 /** @return string 'pass' | 'fail' | 'error' (Cloudflare unreachable) | 'off' */
@@ -243,8 +258,8 @@ function famly_ef_send_failure_alert(array $row, $error) {
     $child   = trim($row['child_first_name'] . ' ' . $row['child_last_name']);
     $subject = 'ACTION NEEDED – enquiry not added to Famly: ' . $child . ' (' . $row['site_label'] . ')';
     $body    = "A tour enquiry came in through the website but could NOT be added to Famly automatically.\n"
-             . "Please add it to Famly by hand (Attendance → Registration → Enquiries → New → + Enquiry),\n"
-             . "or use Retry on the Famly Enquiries screen in WordPress once the problem is fixed.\n\n"
+             . "Please add it to Famly by hand (Attendance → Registration → Enquiries → New → + Enquiry).\n"
+             . "The website doesn't keep a copy of these details, so this email is the only record.\n\n"
              . famly_ef_email_details($row)
              . "\n---\nReason: " . $error
              . "\nWebsite enquiry #" . ($row['id'] ?? 0)

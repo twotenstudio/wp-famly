@@ -278,6 +278,24 @@ function famly_ef_turnstile_keys() {
     return null;
 }
 
+/**
+ * Keyed hash of a Famly ID, so stored state never holds the raw ID.
+ * Uses the plugin's own random key (not WP salts): if salts were rotated,
+ * every stored hash would change and old enquiries would be emailed again.
+ */
+function famly_ef_id_hash($id) {
+    $key = get_option('famly_ef_hash_key');
+    if (!$key) {
+        add_option('famly_ef_hash_key', wp_generate_password(64, true, true), '', false);
+        $key = get_option('famly_ef_hash_key');
+    }
+    return 'h:' . substr(hash_hmac('sha256', (string) $id, $key), 0, 40);
+}
+
+function famly_ef_is_hash($value) {
+    return strpos((string) $value, 'h:') === 0;
+}
+
 /** Write to the PHP error log. Never pass personal data in $message. */
 function famly_ef_log($message) {
     error_log('[Famly] ' . $message);

@@ -3,7 +3,7 @@
  * Plugin Name: Famly Enquiry Form
  * Plugin URI: https://github.com/twotenstudio/wp-famly
  * Description: Nursery tour enquiry form for Famly (Famly-form link or on-page form via the Famly Public API), plus email alerts for new Famly enquiries, local storage, email fallback, spam protection, GTM tracking and an admin dashboard.
- * Version: 1.1.1
+ * Version: 1.2.0
  * Requires at least: 6.3
  * Requires PHP: 7.4
  * Author: Two Ten Studio
@@ -14,8 +14,8 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('FAMLY_EF_VERSION', '1.1.1');
-define('FAMLY_EF_DB_VERSION', '1');
+define('FAMLY_EF_VERSION', '1.2.0');
+define('FAMLY_EF_DB_VERSION', '2');
 define('FAMLY_EF_FILE', __FILE__);
 define('FAMLY_EF_DIR', plugin_dir_path(__FILE__));
 define('FAMLY_EF_URL', plugin_dir_url(__FILE__));
@@ -50,8 +50,9 @@ function famly_ef_activate() {
     }
 }
 
-// Keep the table schema current without needing a re-activation.
-add_action('admin_init', function () {
+// Keep the table schema current without needing a re-activation (on every
+// request type: the server cron runs through WP-CLI, which skips admin_init).
+add_action('init', function () {
     if (get_option('famly_ef_db_version') !== FAMLY_EF_DB_VERSION) {
         famly_ef_create_table();
         update_option('famly_ef_db_version', FAMLY_EF_DB_VERSION);

@@ -1,6 +1,6 @@
 <?php
 /**
- * WP-CLI: wp famly-enquiry <status|check|poll|sites|dry-run|retry>
+ * WP-CLI: wp famly-enquiry <status|check|poll|purge|sites|dry-run|retry>
  */
 
 if (!defined('ABSPATH')) exit;
@@ -113,6 +113,17 @@ class Famly_EF_CLI {
             }
         }
         if ($failed) WP_CLI::halt(1);
+    }
+
+    /**
+     * Remove personal details from enquiries that still have them (runs every 5 minutes anyway).
+     *
+     * [--include-existing]
+     * : Also clean the rows that existed before 1.2.0 (only with the site owner's OK).
+     */
+    public function purge($args, $assoc) {
+        $r = famly_ef_purge_stale(!empty($assoc['include-existing']));
+        WP_CLI::success("Removed details from {$r['anonymised']} enquiry(ies); {$r['alerted']} unfinished submission(s) emailed first.");
     }
 
     /**

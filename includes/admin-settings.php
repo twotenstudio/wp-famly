@@ -281,6 +281,7 @@ function famly_ef_settings_page() {
             </script>
 
             <h2>Notifications</h2>
+            <p><strong>Enquiry details aren't kept in WordPress.</strong> An on-page enquiry is saved only while it's being sent to Famly and emailed; its personal details are then removed (a 5-minute clean-up catches anything left), keeping just the date, nursery and outcome. The new-enquiry alerts store only scrambled (hashed) Famly enquiry IDs, so they know what they've already emailed.</p>
             <table class="form-table" role="presentation">
                 <tr><th scope="row">Notification email</th><td>
                     <?php if (defined('FAMLY_NOTIFY_EMAIL') && FAMLY_NOTIFY_EMAIL) : ?>

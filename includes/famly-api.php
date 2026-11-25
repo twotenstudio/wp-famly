@@ -90,6 +90,20 @@ function famly_ef_create_inquiry(array $input, $token) {
     return $result;
 }
 
+/**
+ * A short, fixed description of a failed Famly call, for storing and emailing.
+ * Deliberately never includes Famly's response text.
+ */
+function famly_ef_error_category(array $result) {
+    $http = (int) ($result['http'] ?? 0);
+    if ($http === 0)                    return 'Could not reach Famly (connection error or timeout)';
+    if ($http === 401 || $http === 403) return 'HTTP ' . $http . ': Famly refused the token (expired, revoked or missing the Manage enquiries permission)';
+    if ($http === 429)                  return 'HTTP 429: Famly is rate-limiting requests';
+    if ($http >= 500)                   return 'HTTP ' . $http . ': Famly server error';
+    if ($http >= 400)                   return 'HTTP ' . $http . ': Famly rejected the request';
+    return 'Unexpected response from Famly';
+}
+
 /** @return array famly_ef_graphql() result plus 'sites' => [siteId => title]. */
 function famly_ef_list_sites($token) {
     $result = famly_ef_graphql(FAMLY_EF_SITES_QUERY, [], $token, 15);

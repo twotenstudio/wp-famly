@@ -31,11 +31,12 @@ Built by Two Ten Studio. The markup, styling hooks and GTM events follow our EYW
 | Postcode, extra questions, consent, UTM | `note` (Famly's API has no fields for these) |
 | — | `bookingSource: WEBSITE`, `referenceNumber: {foreignId: "wp-<id>", system}` |
 
-### Nothing is lost
+### Nothing is lost, nothing is kept
 
 1. Every enquiry is saved to the `wp_famly_enquiries` table before Famly is called.
 2. If Famly fails (connection error, expired token, missing site ID, validation error), the enquiry is marked **Not in Famly**. An **ACTION NEEDED** email with all the details goes to the notification addresses, and the admin menu shows a count.
-3. **Famly Enquiries** in wp-admin has **Send to Famly** (retry) and **Added by hand** buttons. Retries are manual on purpose, so an ambiguous timeout can't create duplicates. An enquiry that already has a Famly ID is never resent.
+3. **Details aren't kept.** As soon as an enquiry has been sent to Famly or emailed, its personal details are removed from WordPress (`famly_ef_anonymise_enquiry`). A clean-up every 5 minutes (`famly_ef_purge`, also `wp famly-enquiry purge`) catches anything left. A submission stuck "sending" for 10+ minutes gets its ACTION NEEDED email first. Only the date, nursery, outcome and a hash of the Famly ID stay, so the ACTION NEEDED email is the only copy of a failed enquiry. Rows from before 1.2.0 are left alone unless you run `wp famly-enquiry purge --include-existing`.
+4. **Famly Enquiries** in wp-admin can mark a failed enquiry **Added by hand**. An enquiry that already has a Famly ID is never resent.
 4. The parent always sees the thank-you message once the enquiry is saved.
 
 ### Spam protection
@@ -81,6 +82,7 @@ Famly doesn't email the nursery when a family enquires, and it has no enquiry we
   - The name and email come from the enquiry's contact (needs **View child information** and **View contact details**), or else from the matched Famly form answers (needs **View forms and responses**).
   - With **Manage enquiries** only, they show as "not available", with a one-line hint to check Famly.
 - **Failures:** after 3 failed checks in a row (usually an expired or revoked token), one "ACTION NEEDED" email goes out. A "working again" email follows when it recovers.
+- **What's stored:** only keyed hashes of the Famly enquiry IDs already seen (so nothing is emailed twice), timestamps, counts and a fixed error description. Famly's response text and enquiry data are never stored.
 - **Status:** **Famly Enquiries** in wp-admin shows the last check, the last new enquiry, any errors, and a **Check Famly now** button.
 
 **Scheduling:** it runs from WP-Cron (`famly_ef_poll`, every 10 minutes). WP-Cron only runs when the site gets traffic, and page caching reduces that, so use a server cron as well, for example:
@@ -118,6 +120,11 @@ wp famly-enquiry retry <id>        # send a stored enquiry to Famly
 The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
 
 ## Changelog
+
+### 1.2.0
+- Nothing personal is kept: on-page enquiries have their details removed as soon as they've been sent to Famly or emailed, with a 5-minute clean-up as a backstop. Spam-held entries store no details. Rows from before 1.2.0 are untouched unless purged with `--include-existing`.
+- The new-enquiry alerts store keyed hashes of Famly enquiry IDs (not the IDs) and only fixed error descriptions (never Famly's response text).
+- New `wp famly-enquiry purge`. The DB schema check now also runs for cron/CLI requests.
 
 ### 1.1.1
 - The new-enquiry alert email is now short: "New enquiry – <nursery>", then the nursery, the enquirer's name and email, and a Famly link, with Reply-To set to the enquirer. The child, phone, tour, form answers and notes are no longer included. The failure and recovery emails are unchanged.

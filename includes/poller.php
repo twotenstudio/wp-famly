@@ -69,13 +69,20 @@ function famly_ef_poll_state() {
     return is_array($state) ? $state : [];
 }
 
+/**
+ * Per-nursery poll state. Holds no enquiry data: "seen" is a list of keyed
+ * hashes of Famly enquiry IDs, and last_error is one of our own fixed messages.
+ */
 function famly_ef_poll_site_state($key) {
     $state = famly_ef_poll_state();
-    return array_merge([
+    $st = array_merge([
         'seeded' => false, 'seeded_at' => 0, 'seen' => [], 'last_checked' => 0, 'last_ok' => 0,
         'last_new' => 0, 'last_new_count' => 0, 'last_error' => '', 'last_error_at' => 0,
         'failures' => 0, 'alerted' => false,
     ], $state[$key] ?? []);
+    // State written by 1.1.x held raw IDs: hash them.
+    $st['seen'] = array_values(array_map(function ($v) { return famly_ef_is_hash($v) ? $v : famly_ef_id_hash($v); }, (array) $st['seen']));
+    return $st;
 }
 
 function famly_ef_save_poll_site_state($key, array $site_state) {
@@ -129,7 +136,7 @@ function famly_ef_poll_site(array $site, array $opts) {
     $inquiries = [];
     if ($error === '') {
         $fetched = famly_ef_fetch_recent_inquiries($site, $token, $st);
-        if ($fetched['error'] !== '') $error = $fetched['error'];
+        if ($fetched['error'] !== '') $error = $fetched['error'];  // our own category text
         $inquiries = $fetched['inquiries'];
     }
 
@@ -153,12 +160,13 @@ function famly_ef_poll_site(array $site, array $opts) {
     $st['alerted']  = false;
     $st['last_ok']  = $now;
 
-    $ids = wp_list_pluck($inquiries, 'id');
+    $ids    = wp_list_pluck($inquiries, 'id');
+    $hashes = array_map('famly_ef_id_hash', $ids);
 
     // First run (or explicit seed): remember what's there, email nothing.
     if (!$st['seeded'] || $opts['seed']) {
         if ($opts['dry_run']) return ['ok' => true, 'seeded' => false, 'would_seed' => count($ids), 'new' => []];
-        $st['seen']      = array_slice(array_values(array_unique(array_merge($ids, $st['seen']))), 0, FAMLY_EF_POLL_SEEN_MAX);
+        $st['seen']      = array_slice(array_values(array_unique(array_merge($hashes, $st['seen']))), 0, FAMLY_EF_POLL_SEEN_MAX);
         $st['seeded']    = true;
         $st['seeded_at'] = $now;
         famly_ef_save_poll_site_state($key, $st);
@@ -170,7 +178,7 @@ function famly_ef_poll_site(array $site, array $opts) {
     $new = [];
     $skipped = 0;
     foreach ($inquiries as $inq) {
-        if (in_array($inq['id'], $st['seen'], true)) continue;
+        if (in_array(famly_ef_id_hash($inq['id']), $st['seen'], true)) continue;
         if (in_array($inq['id'], $own, true)) { $skipped++; continue; }                  // already emailed at submission
         if (strtotime($inq['createdAt']) < $st['seeded_at'] - HOUR_IN_SECONDS) { $skipped++; continue; } // older than our first look
         if (!famly_ef_poll_wants($inq)) { $skipped++; continue; }                           // staff-added / imported
@@ -189,7 +197,7 @@ function famly_ef_poll_site(array $site, array $opts) {
         return ['ok' => true, 'new' => $new, 'skipped' => $skipped, 'answers' => $new ? ($answers ?? []) : []];
     }
 
-    $st['seen'] = array_slice(array_values(array_unique(array_merge($ids, $st['seen']))), 0, FAMLY_EF_POLL_SEEN_MAX);
+    $st['seen'] = array_slice(array_values(array_unique(array_merge($hashes, $st['seen']))), 0, FAMLY_EF_POLL_SEEN_MAX);
     if ($new) {
         $st['last_new']       = $now;
         $st['last_new_count'] = count($new);
@@ -214,10 +222,12 @@ function famly_ef_fetch_recent_inquiries(array $site, $token, array $st) {
         // Child/contact fields can be refused (403) while the list itself works:
         // that comes back as partial data, which is fine.
         if (!$r['ok'] || !is_array($list) || !isset($list['results'])) {
-            return ['inquiries' => $all, 'error' => $r['error'] ?: 'Unexpected response from Famly'];
+            // The log (PHP error log, not the database) gets Famly's message; state and emails get our category.
+            famly_ef_log('Poll ' . $site['key'] . ': Famly said: ' . mb_substr((string) $r['error'], 0, 200));
+            return ['inquiries' => $all, 'error' => famly_ef_error_category($r)];
         }
         $all = array_merge($all, $list['results']);
-        $unseen = array_diff(wp_list_pluck($list['results'], 'id'), $st['seen']);
+        $unseen = array_diff(array_map('famly_ef_id_hash', wp_list_pluck($list['results'], 'id')), $st['seen']);
         if (!$st['seeded'] || count($unseen) < count($list['results']) || empty($list['next'])) break;
         $cursor = $list['next'];
     }
@@ -238,8 +248,13 @@ function famly_ef_poll_wants(array $inq) {
 function famly_ef_inquiry_ids_created_here(array $ids) {
     global $wpdb;
     if (!$ids || !famly_ef_table_exists()) return [];
-    $in = implode(',', array_fill(0, count($ids), '%s'));
-    return $wpdb->get_col($wpdb->prepare('SELECT famly_inquiry_id FROM ' . famly_ef_table() . " WHERE famly_inquiry_id IN ($in)", $ids));
+    // Rows keep the raw ID until their details are removed, then a hash of it.
+    $lookup = [];
+    foreach ($ids as $id) { $lookup[$id] = $id; $lookup[famly_ef_id_hash($id)] = $id; }
+    $keys  = array_keys($lookup);
+    $in    = implode(',', array_fill(0, count($keys), '%s'));
+    $found = $wpdb->get_col($wpdb->prepare('SELECT famly_inquiry_id FROM ' . famly_ef_table() . " WHERE famly_inquiry_id IN ($in)", $keys));
+    return array_values(array_unique(array_map(function ($v) use ($lookup) { return $lookup[$v]; }, $found)));
 }
 
 /**
