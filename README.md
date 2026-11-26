@@ -78,9 +78,10 @@ Famly doesn't email the nursery when a family enquires, and it has no enquiry we
 - **First check:** the first check for a nursery only records the enquiries already there, so the backlog isn't emailed.
 - **Which enquiries:** by default only online enquiries trigger an email. That means Famly forms and lead sites (booking source `WEBSITE`, `CHILDCARE_SITE`, `DAYNURSERIES_SITE`, `NUURI_SITE`, `FACEBOOK`, or "created through registration form"), not ones staff add by hand or import. A setting switches this to every new enquiry.
 - **No double emails:** enquiries this plugin created itself (API form mode) are skipped, because they were emailed on submission.
-- **What's in the email:** it's kept short: subject "New enquiry – Surrey Quays", then the nursery, the enquirer's name and email, and a link to the nursery's Famly enquiries. Reply-To is set to the enquirer.
-  - The name and email come from the enquiry's contact (needs **View child information** and **View contact details**), or else from the matched Famly form answers (needs **View forms and responses**).
-  - With **Manage enquiries** only, they show as "not available", with a one-line hint to check Famly.
+- **What's in the email:** subject "New enquiry – Surrey Quays: <enquirer's name>". The body gives the nursery, when it came in, the enquirer's name, email and phone, the showaround time, how they got in touch and how they heard about you, then their form answers (start date, booking note, funding, days). Reply-To is set to the enquirer, and there's a link to the nursery's Famly enquiries.
+  - **The child's details are never included.** The child's name, date of birth and gender, anything in the form's "Child" section and any question that names the child are dropped when the Famly response is read, and the enquiry query doesn't request the child's own fields. The enquiry's free-text note isn't included either.
+  - The details come from the enquiry's contact (needs **View child information** and **View contact details**), or else from the matched Famly form answers (needs **View forms and responses**).
+  - With **Manage enquiries** only, the name and email show as "not available", with a one-line hint to check Famly.
 - **Per nursery:** each nursery has a "Check this nursery" switch. A nursery that's switched off, or has no token or site ID yet, is skipped and shown as waiting, not as failing.
 - **Failures:** after 3 failed checks in a row (usually an expired or revoked token), one "ACTION NEEDED" email goes out. A "working again" email follows when it recovers.
 - **What's stored:** only keyed hashes of the Famly enquiry IDs already seen (so nothing is emailed twice), timestamps, counts and a fixed error description. Famly's response text and enquiry data are never stored.
@@ -121,6 +122,9 @@ wp famly-enquiry retry <id>        # send a stored enquiry to Famly
 The plugin checks GitHub Releases on `twotenstudio/wp-famly`. To ship an update, bump the version in `wp-famly.php` (header and `FAMLY_EF_VERSION`), tag it as `vX.Y.Z`, and publish a Release.
 
 ## Changelog
+
+### 1.4.0
+- The new-enquiry alert email is detailed again, without the child: the enquirer's name (also in the subject), email and phone, the showaround time, how they got in touch and heard about you, and their form answers. The child's name, date of birth and any child questions are left out, and the poll no longer requests the child's own fields from Famly.
 
 ### 1.3.0
 - Per-nursery "Check this nursery" switch for new-enquiry alerts. A nursery that's switched off, or has no API token or site ID yet, is skipped quietly and shows "Off for this nursery" or "Waiting for an API token" on the dashboard. It never counts as a failed check or triggers the failure alert.

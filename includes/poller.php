@@ -29,8 +29,8 @@ const FAMLY_EF_POLL_QUERY = 'query NewEnquiries($ids: [SiteId!]!, $cursor: Inqui
     next
     results { id createdAt status source bookingSource note
       actions { type subject note due }
-      child { name { fullName } birthday
-        contacts { name { fullName } email phoneNumbers { value phoneType } } } } } } }';
+      child { contacts { name { fullName } email phoneNumbers { value phoneType } } } } } } }';
+// The child's own fields (name, date of birth) are deliberately not requested: alert emails leave them out.
 
 const FAMLY_EF_RESPONSES_QUERY = 'query FormAnswers($form: CustomRegistrationFormId!, $ss: SiteSetId!, $from: LocalDate) {
   formResponses(formId: $form, siteSetId: $ss, startDate: $from, pageSize: 50) {
@@ -295,14 +295,52 @@ function famly_ef_match_form_answers(array $site, $token, array $inquiries) {
     return $matched;
 }
 
-/** Turn a Famly form response into [label => readable value]. */
+/**
+ * True for a form field about the child: Famly's child fields (name, date of
+ * birth, gender), anything in a "Child" section, or a question that names the
+ * child. "Childcare" questions (funding) are not child fields.
+ */
+function famly_ef_is_child_field($section_name, array $f) {
+    if (preg_match('/^(CHILD|DATE_OF_BIRTH|BIRTH|GENDER)/', strtoupper((string) ($f['fieldType'] ?? '')))) return true;
+    $text = $section_name . ' ' . ($f['fieldName'] ?? '');
+    return (bool) preg_match('/\b(child|child\'s|children|children\'s|baby)\b|date of birth|birthday|\bdob\b|\bgender\b/i', $text);
+}
+
+/** The first date-time in a Famly value (a tour booking), formatted; '' if none. */
+function famly_ef_first_datetime($raw) {
+    if (!preg_match('/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?/', (string) $raw, $m)) return '';
+    $t = strtotime($m[0]);
+    return $t ? wp_date('D d/m/Y H:i', $t) : '';
+}
+
+/**
+ * Turn a Famly form response into [label => readable value]. The child's
+ * fields are dropped here, so they never reach an email. A tour booking
+ * becomes "Showaround" => its date and time.
+ */
 function famly_ef_flatten_form_response(array $resp) {
     $out = [];
     foreach ((array) $resp['sections'] as $section) {
         $fields = (array) $section['fields'];
         foreach ($fields as $f) {
             if (in_array($f['fieldType'], ['PRIVACY_POLICY_CONFIRMATION', 'UPLOADER', 'CUSTOM_UPLOADER', 'SIGNATURE'], true)) continue;
-            $value = famly_ef_readable_value($f['value']);
+            if (famly_ef_is_child_field((string) $section['sectionName'], $f)) continue;
+            if ($f['fieldType'] === 'TOUR_BOOKING') {
+                $when = famly_ef_first_datetime($f['value']);
+                $out['Showaround'] = $when !== '' ? $when : famly_ef_readable_value($f['value']);
+                continue;
+            }
+            // A name can come back as {"firstName": .., "lastName": ..}: join the parts.
+            $json = preg_match('/NAME$/', (string) $f['fieldType']) ? json_decode((string) $f['value'], true) : null;
+            if (is_array($json)) {
+                $parts = [];
+                array_walk_recursive($json, function ($v, $k) use (&$parts) {
+                    if (is_string($v) && trim($v) !== '' && !(is_string($k) && preg_match('/id$/i', $k))) $parts[] = trim($v);
+                });
+                $value = implode(' ', $parts);
+            } else {
+                $value = famly_ef_readable_value($f['value']);
+            }
             if ($value === '') continue;
             // Famly's builder gives custom fields generic names ("Dropdown - single",
             // "Custom multi-select (checkbox)"); the question is the section name.
@@ -383,19 +421,70 @@ function famly_ef_enquirer(array $inq, $answers) {
     return ['name' => $name, 'email' => is_email($email) ? $email : ''];
 }
 
-/** Plain-text email for a new Famly enquiry: nursery, enquirer name and email, Famly link (no sending). */
-function famly_ef_build_new_inquiry_email(array $site, array $inq, $answers) {
-    $who = famly_ef_enquirer($inq, $answers);
+/** "CHILDCARE_SITE" -> "Childcare site"; '' stays ''. */
+function famly_ef_humanise_enum($value) {
+    $value = trim((string) $value);
+    return $value === '' ? '' : ucfirst(strtolower(str_replace('_', ' ', $value)));
+}
 
-    $subject = 'New enquiry – ' . famly_ef_site_short_name($site);
-    $body    = "A new enquiry has come in through Famly.\n\n"
-             . 'Nursery: ' . $site['label'] . "\n"
-             . 'Name: ' . ($who['name'] !== '' ? $who['name'] : 'not available') . "\n"
-             . 'Email: ' . ($who['email'] !== '' ? $who['email'] : 'not available') . "\n";
-    if ($who['name'] === '' && $who['email'] === '') {
+/**
+ * Plain-text email for a new Famly enquiry (no sending): the enquirer's name,
+ * email and phone, the showaround, how they got in touch and their form
+ * answers. The child's details are never included.
+ */
+function famly_ef_build_new_inquiry_email(array $site, array $inq, $answers) {
+    $answers = is_array($answers) ? $answers : [];
+    $who     = famly_ef_enquirer($inq, $answers);
+    $contact = $inq['child']['contacts'][0] ?? null;
+
+    $phones = [];
+    foreach ((array) ($contact['phoneNumbers'] ?? []) as $p) {
+        if (!empty($p['value'])) $phones[] = trim((string) $p['value']);
+    }
+    $showaround = (string) ($answers['Showaround'] ?? '');
+    foreach ((array) ($inq['actions'] ?? []) as $a) {
+        if (($a['type'] ?? '') === 'SHOWAROUND' && !empty($a['due'])) $showaround = wp_date('D d/m/Y H:i', strtotime($a['due']));
+    }
+
+    // Form answers not already shown above (name, email, phone, showaround).
+    $rest = [];
+    foreach ($answers as $label => $value) {
+        if ($label === 'Showaround') continue;
+        if ($who['email'] !== '' && strcasecmp($value, $who['email']) === 0) continue;
+        if (preg_match('/^(?!child)[^:]+:\s*(first |last |full )?name$/i', $label)) continue;
+        if (preg_match('/\b(mobile|phone)\b/i', $label)) {
+            if (!$phones) { $phones[] = $value; continue; }
+            if (in_array($value, $phones, true)) continue;
+        }
+        $rest[$label] = $value;
+    }
+
+    $lines = [
+        'Nursery'               => $site['label'],
+        'Received'              => wp_date('D d/m/Y H:i', strtotime($inq['createdAt'])),
+        'Name'                  => $who['name'] !== '' ? $who['name'] : 'not available',
+        'Email'                 => $who['email'] !== '' ? $who['email'] : 'not available',
+        'Phone'                 => implode(', ', array_unique($phones)),
+        'Showaround'            => $showaround,
+        'How they got in touch' => famly_ef_humanise_enum($inq['bookingSource'] ?? ''),
+        'Heard about us'        => famly_ef_humanise_enum($inq['source'] ?? ''),
+    ];
+
+    $subject = 'New enquiry – ' . famly_ef_site_short_name($site)
+             . ($who['name'] !== '' ? ': ' . trim(preg_replace('/[\r\n\t]+/', ' ', $who['name'])) : '');
+    $body    = "A new enquiry has come in through Famly.\n\n";
+    foreach ($lines as $label => $value) {
+        if ($value !== '') $body .= $label . ': ' . $value . "\n";
+    }
+    if ($rest) {
+        $body .= "\nTheir answers:\n";
+        foreach ($rest as $label => $value) $body .= '- ' . $label . ': ' . $value . "\n";
+    }
+    if ($who['name'] === '' && $who['email'] === '' && !$rest) {
         $body .= "\nThe enquirer's details couldn't be read from Famly; please check the enquiry in Famly.\n";
     }
-    $body .= "\nView it in Famly: " . famly_ef_famly_inquiries_url($site) . "\n";
+    $body .= "\nView it in Famly: " . famly_ef_famly_inquiries_url($site) . "\n"
+           . "\n---\nThe child's details are left out of this email; you'll find them in Famly.\n";
 
     $headers = ['Content-Type: text/plain; charset=UTF-8'];
     if ($who['email'] !== '') {
